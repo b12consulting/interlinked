@@ -1,7 +1,7 @@
 
 # Quickstart
 
-This first example shows first pattern matching and then dependency
+This initial example shows first pattern matching and then dependency
 resolution.
 
 ```python
