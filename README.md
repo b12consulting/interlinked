@@ -40,6 +40,6 @@ print(registry.run("many_echo"))  # -> TEST TEST
 ```
 
 
-# Receipts
+# Recipes
 
 TODO ...
