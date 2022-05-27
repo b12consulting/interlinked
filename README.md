@@ -32,11 +32,11 @@ previous code).
 
 
 ```python
-from interlinked.workflow import Workflow
 
-workflow = Workflow()
-workflow.resolve = lambda target, **kw: workflow.run(target, **kw).upper()
-print(workflow.run("many_echo"))  # -> TEST TEST
+from interlinked.workflow import default_workflow as wkf
+
+wkf.resolve = lambda target, **kw: wkf.run(target, **kw).upper()
+print(wkf.run("many_echo"))
 ```
 
 
