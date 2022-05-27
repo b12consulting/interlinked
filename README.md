@@ -36,7 +36,7 @@ previous code).
 from interlinked.workflow import default_workflow as wkf
 
 wkf.resolve = lambda target, **kw: wkf.run(target, **kw).upper()
-print(wkf.run("many_echo")) -> TEST TEST
+print(wkf.run("many_echo"))  # -> TEST TEST
 ```
 
 
