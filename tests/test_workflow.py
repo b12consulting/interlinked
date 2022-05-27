@@ -1,5 +1,5 @@
 import pytest
-from interlinked.registry import run, Registry, provide, depend
+from interlinked.workflow import run, default_workflow, provide, depend
 
 
 @provide('echo')
@@ -22,25 +22,23 @@ def test_run_no_depends():
     assert res == 'test'
 
     # Works also with the pattern itself, and explicit parameter
-    registry = Registry(name="explicit")
-    res = registry.run('echo.{name}')
+    res = run('echo.{name}', name="explicit")
     assert res == 'explicit'
 
     # We get None if the name is not matched
     with pytest.raises(KeyError):
-        registry.by_name('spam')
+        default_workflow.by_name('spam')
 
 
 def test_run_with_depends():
-    registry = Registry()
-
-    res = registry.run('many_echo')
+    res = run('many_echo')
     assert res == 'test test'
 
-    registry_bis = Registry(repeat=3, name="test")
-    registry_bis.resolve = lambda name: registry_bis.run(name)
-    res = registry_bis.run('many_echo')
+    workflow_bis = default_workflow.clone(repeat=3, name="test")
+    workflow_bis.resolve = lambda name: workflow_bis.run(name)
+    res = workflow_bis.run('many_echo')
     assert res == 'test test test'
+
 
 def test_run_custom_resolver():
     pass  # TODO

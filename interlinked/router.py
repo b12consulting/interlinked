@@ -13,7 +13,19 @@ class Router:
         for path, value in routes.items():
             self.add(path, value)
 
+    def clone(self):
+        '''
+        Return a proper copy of the current router.
+        '''
+        # Unpack value tuples and pass results to constructor
+        routes = {path: item for path, (_, item) in self.routes.items()}
+        return Router(**routes)
+
     def add(self, path, value):
+        '''
+        Add the given value under the key containing the parameterized
+        path.
+        '''
         if "{}" in path:
             msg = "Anonymous pattern '{}' is not supported (in %s)"
             raise ValueError(msg % path)

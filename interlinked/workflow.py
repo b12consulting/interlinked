@@ -7,13 +7,14 @@ from interlinked import Router
 
 class Item:
 
-    def __init__(self, kw=None):
+    def __init__(self, workflow, kw=None):
+        self.workflow = workflow
         self.fn = None
         self.kw = kw or {}
         self.dependencies = {}
 
     def __call__(self, fn):
-        Registry.by_fn[fn].append(self)
+        self.workflow.by_fn[fn].append(self)
         self.fn = fn
         return fn
 
@@ -22,54 +23,66 @@ class Item:
         return self
 
 
-class Registry:
-    router = Router()
-    by_fn = defaultdict(list)
+class Workflow:
 
-    def __init__(self, **base_kw):
-        self.base_kw = base_kw
-        self.resolve = self.run
+    def __init__(self, router=None, by_fn=None, base_kw=None, resolve=None):
+        self.router = router or Router()
+        self.by_fn = defaultdict(list)
+        self.by_fn.update(by_fn or {})
+        self.base_kw = {}
+        self.base_kw.update(base_kw or {})
+        self.resolve = resolve or self.run
 
     @classmethod
-    def provide(cls, pattern, **kw):
-        if pattern in Registry.router:
-            raise ValueError(f"{pattern} already defined in Registry")
-        item = Item(kw)
-        Registry.router.add(pattern, item)
+    def new(cls, **base_kw):
+        return Workflow(
+            base_kw=base_kw
+        )
+
+    def clone(self, **kw):
+        new_wkf = Workflow(
+            router=self.router.clone(),
+            by_fn=self.by_fn,
+            base_kw={**self.base_kw, **kw},
+        )
+        return new_wkf
+
+    def provide(self, pattern, **kw):
+        if pattern in self.router:
+            raise ValueError(f"{pattern} already defined in Workflow")
+        item = Item(self, kw)
+        self.router.add(pattern, item)
         return item
 
-    @classmethod
-    def depend(cls, **dependencies):
+    def depend(self, **dependencies):
         def decorator(fn):
-            for item in Registry.by_fn[fn]:
+            for item in self.by_fn[fn]:
                 item.dependencies = {**dependencies, **item.dependencies}
             return fn
         return decorator
 
-    @classmethod
-    def by_name(cls, name):
+    def by_name(self, name):
         '''
         Find a function that match the given name. Either because the
         exact name is found. Either through pattern matching. Returns
         a tuple containing the function, the parameters extracted by
         pattern matching and the dependencies needed by this function.
         '''
-        match = cls.router.match(name)
+        match = self.router.match(name)
         if not match:
-            raise KeyError(f"No ressource found in registry for '{name}'")
+            raise KeyError(f"No ressource found in workflow for '{name}'")
         # match contains an extra dict of kw, that contains values
         # used for pattern matching
         item, match_kw = match
         return item.fn, {**item.kw,  **match_kw}, item.dependencies
 
     def run(self, resource_name, **extra_kw):
-        # print(resource_name, extra_kw)
-        fn, match_kw, dependencies = Registry.by_name(resource_name)
+        fn, match_kw, dependencies = self.by_name(resource_name)
         kw = {**self.base_kw, **match_kw, **extra_kw}
         # Resolve dependencies
         if dependencies:
             if not self.resolve:
-                raise RuntimeError("Missing resolve function on registry")
+                raise RuntimeError("Missing resolve function on workflow")
 
             for alias, table in dependencies.items():
                 table = table.format(**kw)
@@ -81,10 +94,10 @@ class Registry:
 
 
 # Define shortcuts
-default_registry = Registry()
-run = default_registry.run
-provide = Registry.provide # XXX use default_registry ?
-depend = Registry.depend
+default_workflow = Workflow()
+run = default_workflow.run
+provide = default_workflow.provide
+depend = default_workflow.depend
 
 
 

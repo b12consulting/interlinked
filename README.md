@@ -32,11 +32,11 @@ previous code).
 
 
 ```python
-from interlinked.registry import Registry
+from interlinked.workflow import Workflow
 
-registry = Registry()
-registry.resolve = lambda target, **kw: registry.run(target, **kw).upper()
-print(registry.run("many_echo"))  # -> TEST TEST
+workflow = Workflow()
+workflow.resolve = lambda target, **kw: workflow.run(target, **kw).upper()
+print(workflow.run("many_echo"))  # -> TEST TEST
 ```
 
 
