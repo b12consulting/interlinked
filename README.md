@@ -60,7 +60,7 @@ step of the workflow.
 
 The examples in the previous section just run the different functions
 in cascade, just like a normal call stack. We can implement caching in
-the resole step. See [](examples/caching.py).
+the resole step. See [examples/caching.py](examples/caching.py).
 
 ## Multi workflow
 
