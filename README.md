@@ -12,11 +12,11 @@ from interlinked import run, provide, depend
 def echo(name='default'):
     return name
 
-
 @depend(value='echo.test')
 @provide('many_echo')
 def many_echo(value, repeat=2):
     return ' '.join([value] * repeat)
+
 
 result = run("echo.spam")
 print(result)  # -> spam
@@ -39,7 +39,30 @@ wkf.resolve = lambda target, **kw: wkf.run(target, **kw).upper()
 print(wkf.run("many_echo"))  # -> TEST TEST
 ```
 
+As you can see, we rebind the `resolve` method of the workflow.
 
-# Recipes
+This workflow object is instanciated for us when interlinked is
+imported. This object is responsible to keep track of dependencies
+(based on `depend` decorator) and to run our code (based on `provide`
+decorator).
 
-TODO ...
+Resolve is the method that is invoked by the workflow to reify the
+parameters defined in `depend`, by default it simply runs the
+corresponding function and reuse the returned values as input.
+
+By rebinding the `resolve` method we can inject custom logic at each
+step of the workflow.
+
+
+# Advanced usages
+
+## Caching
+
+The examples in the previous section just run the different functions
+in cascade, just like a normal call stack. We can implement caching in
+the resole step. See <examples/caching.py>.
+
+## Multi workflow
+
+More workflow objects can be created to support more complex
+scenario. (TODO)
