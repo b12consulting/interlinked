@@ -41,7 +41,7 @@ print(wkf.run("many_echo"))  # -> TEST TEST
 
 As you can see, we rebind the `resolve` method of the workflow.
 
-This workflow object is instanciated for us when interlinked is
+The workflow object is instanciated for us when interlinked is
 imported. This object is responsible to keep track of dependencies
 (based on `depend` decorator) and to run our code (based on `provide`
 decorator).
@@ -59,8 +59,31 @@ step of the workflow.
 ## Caching
 
 The examples in the previous section just run the different functions
-in cascade, just like a normal call stack. We can implement caching in
-the resole step. See [examples/caching.py](examples/caching.py).
+in cascade, like a normal call stack. We can adapt the resolve method
+to cache the result of dependencies, something like this:
+
+```python
+custom_cache = {}
+def runner(ressource, for_date):
+    if (ressource, for_date) in custom_cache:
+        return custom_cache[ressource, for_date]
+
+    res = wkf.run(ressource, for_date=for_date)
+    custom_cache[ressource, for_date] = res
+    return res
+
+
+# Use custom resolver
+wkf.resolve = runner
+```
+
+As your can see the `runner` function as a `for_date` parameter, which
+is dependant of your use case. The interlinked codebase doesn't know
+anything about it and will rely on the dependency injection mechanism
+to pass the correct value, like it is done in decorated functions.
+
+See [examples/caching.py](examples/caching.py) for a full example.
+
 
 ## Multi workflow
 
