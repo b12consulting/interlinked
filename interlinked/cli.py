@@ -1,6 +1,8 @@
 import argparse
 import logging
-from collections import defaultdict
+
+from .workflow import Workflow
+from .exceptions import InterlinkedException
 
 try:
     import rich
@@ -46,6 +48,16 @@ def deps(wkf):
     rich.print(top_tree)
 
 
+def validate(args):
+    wkf = Workflow.get(args.name)
+    if not wkf:
+        exit(f"Workflow '{args.name}' not found")
+    try:
+        wkf.validate()
+    except InterlinkedException as e:
+        exit("Error: " + str(e))
+    print("ok")
+
 def main(wkf=default_workflow):
 
     parser = argparse.ArgumentParser(
@@ -64,6 +76,13 @@ def main(wkf=default_workflow):
     parser_version = subparsers.add_parser(
         "version", description="Print version")
     parser_version.set_defaults(func=lambda a: print(__version__))
+
+    parser_validate = subparsers.add_parser(
+        "validate", description="Validate Workflow")
+    parser_validate.add_argument(
+        "-n", "--name", default="default_workflow", help="Workflow name",
+    )
+    parser_validate.set_defaults(func=validate)
 
     parser_run = subparsers.add_parser(
         "run", description="Print run")

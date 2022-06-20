@@ -41,11 +41,11 @@ def test_loop():
 
     # Zero does not exists yet
     with pytest.raises(UnknownDependency):
-        loopy.run("first")
+        loopy.validate()
 
     @loopy.provide('zero')
     def zero():
         return
 
     with pytest.raises(LoopException):
-        loopy.run("first")
+        loopy.validate()

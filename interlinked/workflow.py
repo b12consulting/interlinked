@@ -29,12 +29,12 @@ class Item:
 
 class Workflow:
 
-    _by_name = {}
+    _registry = {}
 
     def __init__(self, name, router=None, by_fn=None, base_kw=None, resolve=None):
-        if name in Workflow._by_name:
+        if name in Workflow._registry:
             raise ValueError(f"Workflow {name} already defined!")
-        Workflow._by_name[name] = self
+        Workflow._registry[name] = self
         self.name = name
         self.router = router or Router()
         self.by_fn = defaultdict(list)
@@ -42,10 +42,14 @@ class Workflow:
         self.base_kw = {}
         self.base_kw.update(base_kw or {})
         self.resolve = resolve or self.run
-        self._ok = False
+        self._validated = False
+
+    @classmethod
+    def get(self, name):
+        return self._registry.get(name)
 
     def validate(self):
-        if self._ok:
+        if self._validated:
             return
 
         deps = self.deps()
@@ -65,7 +69,7 @@ class Workflow:
             level = set(new_level)
             ancestors |= new_level
 
-        self._ok = True
+        self._validated = True
 
     def deps(self):
         '''
@@ -102,7 +106,7 @@ class Workflow:
         return new_wkf
 
     def provide(self, pattern, **kw):
-        self._ok = False
+        self._validated = False
         if pattern in self.router:
             msg = f"{pattern} already defined in Workflow '{self.name}'"
             raise ValueError(msg)
@@ -111,7 +115,7 @@ class Workflow:
         return item
 
     def depend(self, **dependencies):
-        self._ok = False
+        self._validated = False
         def decorator(fn):
             for item in self.by_fn[fn]:
                 item.depend(dependencies)
@@ -141,8 +145,6 @@ class Workflow:
         return item, {**item.kw,  **match_kw}
 
     def run(self, resource_name, **extra_kw):
-        self.validate()
-
         item, match_kw = self.by_name(resource_name)
         kw = {**self.base_kw, **match_kw, **extra_kw}
         # Resolve dependencies
