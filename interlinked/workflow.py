@@ -1,13 +1,16 @@
 from collections import defaultdict
 from functools import partial
 from inspect import signature, Signature
+from itertools import chain
 
 from interlinked import Router
-
+from interlinked.exceptions import (
+    NoRootException, LoopException, UnknownDependency)
 
 class Item:
 
-    def __init__(self, workflow, kw=None):
+    def __init__(self, pattern, workflow, kw=None):
+        self.pattern = pattern
         self.workflow = workflow
         self.fn = None
         self.kw = kw or {}
@@ -19,29 +22,79 @@ class Item:
         self.fn = fn
         return fn
 
-    def depend(self, **dependencies):
-        self.dependencies.update(dependencies)
+    def depend(self, dependencies):
+        self.dependencies = {**dependencies, **self.dependencies}
         return self
 
 
 class Workflow:
 
-    def __init__(self, router=None, by_fn=None, base_kw=None, resolve=None):
+    _by_name = {}
+
+    def __init__(self, name, router=None, by_fn=None, base_kw=None, resolve=None):
+        if name in Workflow._by_name:
+            raise ValueError(f"Workflow {name} already defined!")
+        Workflow._by_name[name] = self
+        self.name = name
         self.router = router or Router()
         self.by_fn = defaultdict(list)
         self.by_fn.update(by_fn or {})
         self.base_kw = {}
         self.base_kw.update(base_kw or {})
         self.resolve = resolve or self.run
+        self._ok = False
 
-    @classmethod
-    def new(cls, **base_kw):
-        return Workflow(
-            base_kw=base_kw
-        )
+    def validate(self):
+        if self._ok:
+            return
 
-    def clone(self, **kw):
+        deps = self.deps()
+        roots = set(deps) - set(chain.from_iterable(deps.values()))
+        if not roots:
+            raise NoRootException(f"No roots for workflow '{self.name}'")
+
+        ancestors = level = roots.copy()
+        while level:
+            new_level = set()
+            for parent in level:
+                children = deps[parent]
+                if any(c in ancestors for c in children):
+                    msg = f"Loop detected in workflow '{self.name}'!"
+                    raise LoopException(msg)
+                new_level |= set(children)
+            level = set(new_level)
+            ancestors |= new_level
+
+        self._ok = True
+
+    def deps(self):
+        '''
+        build {parent: [child]} dependency dictionary.
+        '''
+        # Init dict
+        p2c = {p: [] for p in self.router.routes}
+        for pattern in self.router.routes:
+            match = self.router.match(pattern)
+            item = match.value
+            parents = item.dependencies.values()
+            for parent in parents:
+                if parent not in p2c:
+                    # Try pattern matching
+                    match = self.router.match(parent)
+                    if match:
+                        parent = match.value.pattern
+                    else:
+                        raise UnknownDependency(
+                            f"Dependency '{parent}' is not known "
+                            f"in workflow '{self.name}'"
+                        )
+                p2c[parent].append(pattern)
+
+        return p2c
+
+    def clone(self, name, **kw):
         new_wkf = Workflow(
+            name,
             router=self.router.clone(),
             by_fn=self.by_fn,
             base_kw={**self.base_kw, **kw},
@@ -49,16 +102,19 @@ class Workflow:
         return new_wkf
 
     def provide(self, pattern, **kw):
+        self._ok = False
         if pattern in self.router:
-            raise ValueError(f"{pattern} already defined in Workflow")
-        item = Item(self, kw)
+            msg = f"{pattern} already defined in Workflow '{self.name}'"
+            raise ValueError(msg)
+        item = Item(pattern, self, kw)
         self.router.add(pattern, item)
         return item
 
     def depend(self, **dependencies):
+        self._ok = False
         def decorator(fn):
             for item in self.by_fn[fn]:
-                item.dependencies = {**dependencies, **item.dependencies}
+                item.depend(dependencies)
             return fn
         return decorator
 
@@ -85,6 +141,8 @@ class Workflow:
         return item, {**item.kw,  **match_kw}
 
     def run(self, resource_name, **extra_kw):
+        self.validate()
+
         item, match_kw = self.by_name(resource_name)
         kw = {**self.base_kw, **match_kw, **extra_kw}
         # Resolve dependencies
@@ -106,7 +164,7 @@ class Workflow:
 
 
 # Define shortcuts
-default_workflow = Workflow()
+default_workflow = Workflow("default_workflow")
 run = default_workflow.run
 provide = default_workflow.provide
 depend = default_workflow.depend

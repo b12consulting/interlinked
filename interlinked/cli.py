@@ -28,19 +28,11 @@ def deps(wkf):
         msg = "Please install rich to display dependencies"
         exit(msg)
 
-    # Create parent-child structure
-    children = defaultdict(list)
-    for pattern in wkf.router.routes:
-        item = wkf.router.get(pattern)
-        deps = item.dependencies.values()
-        if not deps:
-            children[pattern] = []
-        else:
-            for dep in deps:
-                children[pattern].append(dep)
+    # Instanciate child->parent dict
+    deps = wkf.deps()
 
-    # Find roots
-    roots = set(children) - set(c for p in children for c in children[p])
+    # Find roots aka items without parents
+    roots = set(deps) - set(p for c in deps for p in deps[c])
     # Build tree
     top_tree = Tree("/", hide_root=True)
     level = [(r, top_tree) for r in roots]
@@ -48,7 +40,7 @@ def deps(wkf):
         new_level = []
         for node, tree in sorted(level, key=lambda x: x[0]):
             subtree = tree.add(node)
-            for child in children[node]:
+            for child in deps[node]:
                 new_level.append((child, subtree))
         level = new_level
     rich.print(top_tree)

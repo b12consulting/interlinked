@@ -71,4 +71,3 @@ class Router:
 
     def __contains__(self, key):
         return key in self.routes
-
