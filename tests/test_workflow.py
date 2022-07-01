@@ -37,10 +37,13 @@ def test_run_with_depends():
     assert res == 'test test'
 
     workflow_bis = wkf.clone(repeat=3, name="test")
-    workflow_bis.resolve = lambda name: workflow_bis.run(name)
     res = workflow_bis.run('many_echo')
     assert res == 'test test test'
 
 
 def test_run_custom_resolver():
-    pass  # TODO
+    wkf.resolve = lambda name: wkf.run(name)
+    resolver = lambda name: wkf.run(name).upper()
+    wkf.resolve = resolver
+    res = wkf.run('many_echo')
+    assert res == 'TEST TEST'

@@ -152,9 +152,9 @@ class Workflow:
             if not self.resolve:
                 raise RuntimeError("Missing resolve function on workflow")
 
-            for alias, table in item.dependencies.items():
-                table = table.format(**kw)
-                read = bind(self.resolve, [table], kw.copy())
+            for alias, ressource in item.dependencies.items():
+                ressource = ressource.format(**kw)
+                read = bind(self.resolve, [ressource], kw.copy())
                 kw[alias] = read()
 
         # Mutate parameters
@@ -171,7 +171,6 @@ run = default_workflow.run
 provide = default_workflow.provide
 depend = default_workflow.depend
 mutate = default_workflow.mutate
-
 
 
 def bind(fn, args=None, kw=None):

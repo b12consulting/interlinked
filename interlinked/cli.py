@@ -58,6 +58,7 @@ def validate(args):
         exit("Error: " + str(e))
     print("ok")
 
+
 def main(wkf=default_workflow):
 
     parser = argparse.ArgumentParser(
