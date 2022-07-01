@@ -1,5 +1,5 @@
 #
-from interlinked.workflow import Workflow
+from interlinked import Workflow
 
 wkf = Workflow("test-mutate")
 @wkf.mutate(prefix=lambda prefix: prefix.upper())

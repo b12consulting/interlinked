@@ -87,5 +87,19 @@ See [examples/caching.py](examples/caching.py) for a full example.
 
 ## Multi workflow
 
-More workflow objects can be created to support more complex
-scenario. (TODO)
+Above examples uses the default workflow object. We can use explicit ones like this
+
+``` python
+wkf_a = Workflow("wkf-a")
+wkf_b = Workflow("wkf-b")
+
+@wkf_a.provide('echo-one')
+def echo_one():
+    return 'one A'
+
+@wkf_b.provide('echo-one')
+def echo_one():
+    return 'one B'
+
+assert wkf_b.run('echo-one') == 'one B'
+```

@@ -1,6 +1,6 @@
 import pytest
 
-from interlinked.workflow import Workflow
+from interlinked import Workflow
 from interlinked.exceptions import LoopException, UnknownDependency
 
 

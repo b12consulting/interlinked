@@ -1,5 +1,5 @@
 import pytest
-from interlinked.workflow import Workflow
+from interlinked import Workflow
 
 
 wkf = Workflow("test-wkf")
