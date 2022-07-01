@@ -26,7 +26,6 @@ print(result)  # -> test test test test
 
 ```
 
-
 This second example shows custom dependency resolution (based on
 previous code).
 
@@ -77,7 +76,7 @@ def runner(ressource, for_date):
 wkf.resolve = runner
 ```
 
-As your can see the `runner` function as a `for_date` parameter, which
+As you can see the `runner` function has a `for_date` parameter, which
 is dependant of your use case. The interlinked codebase doesn't know
 anything about it and will rely on the dependency injection mechanism
 to pass the correct value, like it is done in decorated functions.
@@ -87,7 +86,7 @@ See [examples/caching.py](examples/caching.py) for a full example.
 
 ## Multi workflow
 
-Above examples uses the default workflow object. We can use explicit ones like this
+Above examples use the default workflow object. We can use explicit ones like this
 
 ``` python
 wkf_a = Workflow("wkf-a")
