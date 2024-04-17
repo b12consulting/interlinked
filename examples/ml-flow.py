@@ -1,82 +1,106 @@
+"""
+Example that combine trainign and inference and reies on
+`ml-flow-params.toml` to provide parameters.
 
+Use log-model-xyz as target to trigger training and log model to mlflow:
 
-TODO BASE EXAMPLE ON https://mlflow.org/docs/latest/model-registry.html#api-workflow
-MAYBE USE CLICK LIB TO HANDLE EXTRA PARAMS (https://click.palletsprojects.com/en/8.1.x/api/#commands) ?
-USE ROUTER TO LOAD CONFIG VALUES (FLATTEN SUB_DICTS?)
+    $ interlinked ml-flow run log-model-first --config ml-flow-params.toml
+    Successfully registered model 'sk-learn-random-forest-first'.
+    Created version '1' of model 'sk-learn-random-forest-first'.
 
+    $ interlinked ml-flow run log-model-second --config ml-flow-params.toml
+    Successfully registered model 'sk-learn-random-forest-second'.
+    Created version '1' of model 'sk-learn-random-forest-second'.
 
-# Adaptation of https://github.com/mlflow/mlflow-example/blob/master/train.py
+    $ interlinked ml-flow run log-model-second --config ml-flow-params.toml
+    Registered model 'sk-learn-random-forest-second' already exists. Creating a new version of this model...
+    Created version '2' of model 'sk-learn-random-forest-second'.
 
-# Usage:
-# with interlinked cli: `interlinked examples.ml-flow run train`
-# or with python interpreter `python examples/ml-flow.py`
+Use infer-xyz as target to trigger inference:
 
-from pathlib import Path
-import warnings
+    $ interlinked ml-flow run infer-first --config ml-flow-params.toml
+    Use model sk-learn-random-forest-first at version 1
+    $ interlinked ml-flow run infer-second --config ml-flow-params.toml
+    Use model sk-learn-random-forest-second at version 2
 
-from pandas import read_csv
-from sklearn.linear_model import ElasticNet
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+You can pass an extra `-s` cli argument to display the output (if any) of the target function
+
+    $ interlinked ml-flow run infer-second --config ml-flow-params.toml  -s
+    Use model sk-learn-random-forest-second at version 2
+    [ 81.32292293  38.42718558  38.27094583  11.8126125   75.89833742
+      15.26967922  95.81896899 -79.19412999 -84.89151001  10.05561881
+      ...
+"""
+
+from sklearn.datasets import make_regression
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import train_test_split
+
+from mlflow.models import infer_signature
 import mlflow
+import mlflow.pyfunc
 import mlflow.sklearn
-from numpy import sqrt, random
 
-from interlinked import depend, provide, run
-
-
-HERE = Path(__file__).parent
+from interlinked import provide, depend
 
 
-def eval_metrics(actual, pred):
-    rmse = sqrt(mean_squared_error(actual, pred))
-    mae = mean_absolute_error(actual, pred)
-    r2 = r2_score(actual, pred)
-    return rmse, mae, r2
+@provide("dataset-{name}")
+def dataset(n_features: int = 4, n_informative: int = 2, random_state: int = 0):
+    X, y = make_regression(
+        n_features=n_features,
+        n_informative=n_informative,
+        random_state=random_state,
+        shuffle=False,
+    )
+    return X, y
 
 
-@provide("wine-quality")
-def ingest():
-    wine_path = HERE / "wine-quality.csv"
-    return read_csv(wine_path)
+@depend(dataset="dataset-{name}")
+@provide("train-{name}")
+def train_model(name, dataset):
+    X, y = dataset
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+    params = {"max_depth": 2, "random_state": 42}
+    model = RandomForestRegressor(**params)
+    model.fit(X_train, y_train)
 
-    
-@depend(df="wine-quality")
-@provide("train")
-def train(df, alpha=0.5, l1_ratio=0.5):
-    warnings.filterwarnings("ignore")
-    random.seed(40)
+    y_pred = model.predict(X_test)
 
-    # Split the data into training and test sets. (0.75, 0.25) split.
-    train, test = train_test_split(df)
+    # Infer the model signature
+    signature = infer_signature(X_test, y_pred)
 
-    # The predicted column is "quality" which is a scalar from [3, 9]
-    train_x = train.drop(["quality"], axis=1)
-    test_x = test.drop(["quality"], axis=1)
-    train_y = train[["quality"]]
-    test_y = test[["quality"]]
+    # Log parameters and metrics using the MLflow APIs
+    mlflow.log_params(params)
+    mlflow.log_metrics({"mse": mean_squared_error(y_test, y_pred)})
 
-    lr = ElasticNet(alpha=alpha, l1_ratio=l1_ratio, random_state=42)
-    lr.fit(train_x, train_y)
+    return model, signature
 
-    predicted_qualities = lr.predict(test_x)
 
-    (rmse, mae, r2) = eval_metrics(test_y, predicted_qualities)
+@depend(trainset="train-{name}")
+@provide("log-model-{name}")
+def log_model(name, trainset):
+    model, signature = trainset
 
-    print("Elasticnet model (alpha=%f, l1_ratio=%f):" % (alpha, l1_ratio))
-    print("  RMSE: %s" % rmse)
-    print("  MAE: %s" % mae)
-    print("  R2: %s" % r2)
-
-    with mlflow.start_run():
-        mlflow.log_param("alpha", alpha)
-        mlflow.log_param("l1_ratio", l1_ratio)
-        mlflow.log_metric("rmse", rmse)
-        mlflow.log_metric("r2", r2)
-        mlflow.log_metric("mae", mae)
-        mlflow.sklearn.log_model(lr, "model")
+    # Log the sklearn model and register as version 1
+    mlflow.sklearn.log_model(
+        sk_model=model,
+        artifact_path="sklearn-model",
+        signature=signature,
+        registered_model_name=f"sk-learn-random-forest-{name}",
+    )
 
 
 
-if __name__ == "__main__":
-    run("train")
+
+@depend(dataset="dataset-{name}")
+@provide("infer-{name}")
+def infer(name, dataset, version=1):
+    X, y = dataset
+    model_name = f"sk-learn-random-forest-{name}"
+    print(f"Use model {model_name} at version {version}")
+    model = mlflow.pyfunc.load_model(model_uri=f"models:/{model_name}/{version}")
+    res = model.predict(X)
+    return res

@@ -1,0 +1,12 @@
+
+# Override params for dataset route
+[dataset-first]
+n_features = 5
+
+[dataset-second]
+n_features = 6
+
+# Override params for infer route
+[infer-second]
+version = 2
+

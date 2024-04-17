@@ -32,10 +32,11 @@ class Workflow:
 
     _registry = {}
 
-    def __init__(self, name, router=None, by_fn=None, base_kw=None, resolve=None, config=None):
-        if name in Workflow._registry:
-            raise ValueError(f"Workflow {name} already defined!")
-        Workflow._registry[name] = self
+    def __init__(self, name=None, router=None, by_fn=None, base_kw=None, resolve=None, config=None):
+        if name:
+            if name in Workflow._registry:
+                raise ValueError(f"Workflow {name} already defined!")
+            Workflow._registry[name] = self
         self.name = name
         self.router = router or Router()
         self.by_fn = defaultdict(list)
@@ -98,15 +99,23 @@ class Workflow:
 
         return p2c
 
-    def clone(self, name, **kw):
+    def clone(self, name=None, config=None, kw=None):
+        kw = kw or {}
+        config = config or self.config_router.routes.copy()
         new_wkf = Workflow(
-            name,
+            name=name,
             router=self.router.clone(),
             by_fn=self.by_fn,
             base_kw={**self.base_kw, **kw},
-            config=self.config_router.routes.copy(),
+            config=config,
         )
         return new_wkf
+
+    def kw(self, **kw):
+        return self.clone(kw=kw)
+
+    def config(self, config):
+        return self.clone(config=config)
 
     def provide(self, pattern, **kw):
         self._validated = False
@@ -204,10 +213,13 @@ def bind(fn, args=None, kw=None):
         if in_pos(name):
             # This param is already defined in args
             continue
+
+        # Add value to partial_kw
         partial_kw[name] = value
 
     if not (args or partial_kw):
         return fn
+
     # if has_var_kw:
     #     # Inject unprocessed params
     #     extra_kw = {k:v for k, v in kw.items() if k not in partial_kw}

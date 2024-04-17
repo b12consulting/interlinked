@@ -22,11 +22,20 @@ logger = logging.getLogger("interlinked")
 def run_cmd(args):
     wkf = find_workflow(args)
 
+    config = load_conf(args.config)
+
     for target in args.targets:
-        res = wkf.run(target)
+        res = wkf.config(config).run(target)
         if args.show:
             print(res)
 
+
+def load_conf(path):
+    if path.endswith(".toml"):
+        import toml
+        return toml.load(path)
+    else:
+        raise ValueError("File type not supported (only toml for now)")
 
 def find_workflow(args):
     src = args.source
@@ -111,6 +120,9 @@ def main():
         "run", description="Print run")
     parser_run.add_argument(
         "-s", "--show", action="store_true", help="Show output"
+    )
+    parser_run.add_argument(
+        "-c", "--config", help="Load parameters from config"
     )
     parser_run.add_argument(
         "targets", nargs="*", help="Run given targets"
