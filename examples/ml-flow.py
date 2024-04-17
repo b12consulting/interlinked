@@ -84,15 +84,13 @@ def train_model(name, dataset):
 def log_model(name, trainset):
     model, signature = trainset
 
-    # Log the sklearn model and register as version 1
+    # Log the sklearn model and register a new version
     mlflow.sklearn.log_model(
         sk_model=model,
         artifact_path="sklearn-model",
         signature=signature,
         registered_model_name=f"sk-learn-random-forest-{name}",
     )
-
-
 
 
 @depend(dataset="dataset-{name}")
