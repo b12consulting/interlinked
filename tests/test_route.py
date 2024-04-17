@@ -20,6 +20,7 @@ def test_add_simple_route():
     for route in ('spam', 'one.spam.three'):
         assert not router.match(route)
 
+
 def test_add_parameterized_route():
     routes = {
         '{one}': lambda one: one,

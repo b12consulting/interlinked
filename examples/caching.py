@@ -1,3 +1,8 @@
+"""
+This example demonstrate the effect of simply adding lru_cache decorator
+"""
+
+from functools import lru_cache
 from datetime import date, timedelta
 import logging
 
@@ -11,6 +16,7 @@ wkf = default_workflow
 
 
 @provide('temperature_{city}')
+@lru_cache
 def temperature(for_date, city):
     log.info('Fetching temperature for %s @ %s', city, for_date)
     url = f"http://wttr.in/{city}?format=j1"
@@ -29,18 +35,6 @@ def average(t_bru, t_par, for_date):
     return t_par, t_bru
 
 
-custom_cache = {}
-def runner(ressource, for_date):
-    if (ressource, for_date) in custom_cache:
-        return custom_cache[ressource, for_date]
-
-    res = wkf.run(ressource, for_date=for_date)
-    custom_cache[ressource, for_date] = res
-    return res
-
-
-# Use custom resolver
-wkf.resolve = runner
 today = date.today()
 tomorrow = today + timedelta(days=1)
 run("temperature_average", for_date=today)
@@ -55,10 +49,3 @@ run("temperature_average", for_date=tomorrow)
 # INFO:example:Fetching temperature for brussels @ 2022-06-03
 # INFO:example:Fetching temperature for paris @ 2022-06-03
 # INFO:example:Compute avg @ 2022-06-03
-
-# Call custom resolver directly (second call is cached)
-runner("temperature_average", for_date=today)
-runner("temperature_average", for_date=today)
-
-## Output
-# INFO:example:Compute avg @ 2022-06-02

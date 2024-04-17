@@ -9,6 +9,7 @@ wkf = Workflow("test-mutate")
 def echo(prefix, suffix=""):
     return prefix + suffix
 
+
 def test_run_mutate():
     res = wkf.run('ham.echo')
     assert res == 'HAM'

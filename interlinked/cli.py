@@ -1,8 +1,9 @@
 import argparse
 import logging
+from importlib.machinery import SourceFileLoader
 
-from .workflow import Workflow
 from .exceptions import InterlinkedException
+from .workflow import Workflow
 
 try:
     import rich
@@ -10,7 +11,7 @@ try:
 except ImportError:
     rich = None
 
-from interlinked import run, default_workflow, __version__
+from interlinked import default_workflow, __version__
 
 
 fmt = "%(levelname)s:%(asctime).19s: %(message)s"
@@ -19,18 +20,38 @@ logger = logging.getLogger("interlinked")
 
 
 def run_cmd(args):
+    wkf = find_workflow(args)
+
     for target in args.targets:
-        res = run(target)
+        res = wkf.run(target)
         if args.show:
             print(res)
 
 
-def deps(wkf):
+def find_workflow(args):
+    src = args.source
+    wkf_variable = None
+    if ":" in src:
+        src, wkf_variable = src.split(":", 1)
+        assert isinstance(wkf_variable, Workflow)
+
+    src = src.replace(".", "/")
+
+    loader = SourceFileLoader(args.source, f"{src}.py")
+    module = loader.load_module()
+    if not wkf_variable:
+        return default_workflow
+
+    return getattr(module, wkf_variable)
+
+
+def deps(args):
     if rich is None:
         msg = "Please install rich to display dependencies"
         exit(msg)
 
     # Instanciate child->parent dict
+    wkf = find_workflow(args)
     deps = wkf.deps()
 
     # Find roots aka items without parents
@@ -49,9 +70,7 @@ def deps(wkf):
 
 
 def validate(args):
-    wkf = Workflow.get(args.name)
-    if not wkf:
-        exit(f"Workflow '{args.name}' not found")
+    wkf = find_workflow(args)
     try:
         wkf.validate()
     except InterlinkedException as e:
@@ -59,11 +78,14 @@ def validate(args):
     print("ok")
 
 
-def main(wkf=default_workflow):
-
+def main():
     parser = argparse.ArgumentParser(
         prog="interlinked",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "source", help="ressource to load in the form of file_name (without the .py) "
+        "or file_name:workflow_name",
     )
     parser.add_argument(
         "-v", "--verbose", action="count", default=0, help="Increase verbosity"
@@ -72,7 +94,7 @@ def main(wkf=default_workflow):
 
     parser_deps = subparsers.add_parser(
         "deps", description="Show dependencies")
-    parser_deps.set_defaults(func=lambda a: deps(wkf))
+    parser_deps.set_defaults(func=deps)
 
     parser_version = subparsers.add_parser(
         "version", description="Print version")

@@ -11,4 +11,6 @@ def echo_one():
 def echo_one():
     return 'one B'
 
-assert wkf_b.run('echo-one') == 'one B'
+
+if __name__ == "__main__":
+    assert wkf_b.run('echo-one') == 'one B'

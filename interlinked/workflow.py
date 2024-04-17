@@ -7,6 +7,7 @@ from interlinked import Router
 from interlinked.exceptions import (
     NoRootException, LoopException, UnknownDependency)
 
+
 class Item:
 
     def __init__(self, pattern, workflow, kw=None):
@@ -31,7 +32,7 @@ class Workflow:
 
     _registry = {}
 
-    def __init__(self, name, router=None, by_fn=None, base_kw=None, resolve=None):
+    def __init__(self, name, router=None, by_fn=None, base_kw=None, resolve=None, config=None):
         if name in Workflow._registry:
             raise ValueError(f"Workflow {name} already defined!")
         Workflow._registry[name] = self
@@ -43,6 +44,7 @@ class Workflow:
         self.base_kw.update(base_kw or {})
         self.resolve = resolve or self.run
         self._validated = False
+        self.config_router = config and Router(**config) or Router()
 
     @classmethod
     def get(self, name):
@@ -102,6 +104,7 @@ class Workflow:
             router=self.router.clone(),
             by_fn=self.by_fn,
             base_kw={**self.base_kw, **kw},
+            config=self.config_router.routes.copy(),
         )
         return new_wkf
 
@@ -145,8 +148,10 @@ class Workflow:
         return item, {**item.kw,  **match_kw}
 
     def run(self, resource_name, **extra_kw):
+        # Search fn and merge all kw
         item, match_kw = self.by_name(resource_name)
-        kw = {**self.base_kw, **match_kw, **extra_kw}
+        config_kw = self.config_router.get(resource_name, {})
+        kw = {**self.base_kw, **match_kw, **extra_kw, **config_kw}
         # Resolve dependencies
         if item.dependencies:
             if not self.resolve:
@@ -154,7 +159,7 @@ class Workflow:
 
             for alias, ressource in item.dependencies.items():
                 ressource = ressource.format(**kw)
-                read = bind(self.resolve, [ressource], kw.copy())
+                read = bind(self.resolve, [ressource], extra_kw)
                 kw[alias] = read()
 
         # Mutate parameters
