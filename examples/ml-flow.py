@@ -1,5 +1,5 @@
 """
-Example that combine trainign and inference and reies on
+Example that combine training and inference with mlflow integration. It relies on
 `ml-flow-params.toml` to provide parameters.
 
 Use log-model-xyz as target to trigger training and log model to mlflow:
