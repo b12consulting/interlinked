@@ -10,6 +10,9 @@ class Router:
 
     def __init__(self, **routes):
         self.routes = defaultdict(set)
+        self.routes.update(routes)
+
+    def add_routes(self, routes):
         for path, value in routes.items():
             self.add(path, value)
 
@@ -18,8 +21,8 @@ class Router:
         Return a proper copy of the current router.
         '''
         # Unpack value tuples and pass results to constructor
-        routes = {path: item for path, (_, item) in self.routes.items()}
-        return Router(**routes)
+        router = Router(**self.routes)
+        return router
 
     def add(self, path, value):
         '''
