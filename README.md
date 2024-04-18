@@ -55,7 +55,7 @@ step of the workflow.
 
 # Advanced usages
 
-## Load parameters from config file
+## Load parameters from config dict
 
 You can provide a config dict to a workflow (or declare add it to the
 default workflow with `set_config`):
@@ -87,6 +87,11 @@ assert res  == "hello spam from conf"
 res = wkf.run("hello.ham")
 assert res == "hello ham FROM CONF"
 ```
+
+
+## Command line 
+
+TODO
 
 
 ## Multi workflow
