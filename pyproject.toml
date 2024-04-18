@@ -4,7 +4,7 @@ description = """
 Interlinked provides routing, dependency management and dependency
 injection for data-driven applications
 """
-version = "0.2"
+version = "0.3.1"
 
 [tool.setuptools]
 packages = ["interlinked"]
