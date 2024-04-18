@@ -55,33 +55,38 @@ step of the workflow.
 
 # Advanced usages
 
-## Caching
+## Load parameters from config file
 
-The examples in the previous section just run the different functions
-in cascade, like a normal call stack. We can adapt the resolve method
-to cache the result of dependencies, something like this:
+You can provide a config dict to a workflow (or declare add it to the
+default workflow with `set_config`):
 
-```python
-custom_cache = {}
-def runner(ressource, for_date):
-    if (ressource, for_date) in custom_cache:
-        return custom_cache[ressource, for_date]
-
-    res = wkf.run(ressource, for_date=for_date)
-    custom_cache[ressource, for_date] = res
-    return res
-
-
-# Use custom resolver
-wkf.resolve = runner
+``` python
+cfg = {
+    "hello.{world}" : {
+        "param" : " from conf",
+    },
+    "hello.ham" : {
+        "param" : " FROM CONF"
+    }
+}
+wkf = Workflow(config=cfg)
 ```
 
-As you can see the `runner` function has a `for_date` parameter, which
-is dependant of your use case. The interlinked codebase doesn't know
-anything about it and will rely on the dependency injection mechanism
-to pass the correct value, like it is done in decorated functions.
+It will be implicitly used when a "provide" route is matched:
 
-See [examples/caching.py](examples/caching.py) for a full example.
+``` python
+@wkf.provide("hello")
+@wkf.provide("hello.{world}")
+def echo(world, param=""):
+    return f"hello {world} {param}"
+
+
+res = wkf.run("hello.spam")
+assert res  == "hello spam from conf"
+
+res = wkf.run("hello.ham")
+assert res == "hello ham FROM CONF"
+```
 
 
 ## Multi workflow
