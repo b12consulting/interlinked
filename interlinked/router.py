@@ -2,7 +2,7 @@ from collections import namedtuple, defaultdict
 import re
 
 Match = namedtuple('Match', ['value', 'kw'])
-ID_PATTERN = "[a-zA-Z0-9_.]+"
+ID_PATTERN = "[a-zA-Z][a-zA-Z0-9_]*"
 PARAM_REGEX = re.compile("{(" + ID_PATTERN + ")}")
 
 
@@ -10,6 +10,9 @@ class Router:
 
     def __init__(self, **routes):
         self.routes = defaultdict(set)
+        self.add_routes(routes)
+
+    def add_routes(self, routes):
         for path, value in routes.items():
             self.add(path, value)
 
@@ -18,8 +21,9 @@ class Router:
         Return a proper copy of the current router.
         '''
         # Unpack value tuples and pass results to constructor
-        routes = {path: item for path, (_, item) in self.routes.items()}
-        return Router(**routes)
+        router = Router()
+        router.routes = self.routes.copy()
+        return router
 
     def add(self, path, value):
         '''

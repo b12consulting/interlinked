@@ -45,11 +45,16 @@ class Workflow:
         self.base_kw.update(base_kw or {})
         self.resolve = resolve or self.run
         self._validated = False
-        self.config_router = config and Router(**config) or Router()
+        self.config_router = Router()
+        self.set_config(config)
 
     @classmethod
     def get(self, name):
         return self._registry.get(name)
+
+    def set_config(self, config):
+        if config:
+            self.config_router = Router(**config)
 
     def validate(self):
         if self._validated:
@@ -157,10 +162,14 @@ class Workflow:
         return item, {**item.kw,  **match_kw}
 
     def run(self, resource_name, **extra_kw):
-        # Search fn and merge all kw
+        # Search fn
         item, match_kw = self.by_name(resource_name)
-        config_kw = self.config_router.get(resource_name, {})
-        kw = {**self.base_kw, **match_kw, **extra_kw, **config_kw}
+        # Identify config item and apply auto-formating
+        config_entry = self.config_router.get(resource_name, {})
+        if config_entry:
+            config_entry = rformat(config_entry, **match_kw)
+
+        kw = {**self.base_kw, **match_kw, **extra_kw, **config_entry}
         # Resolve dependencies
         if item.dependencies:
             if not self.resolve:
@@ -185,6 +194,7 @@ run = default_workflow.run
 provide = default_workflow.provide
 depend = default_workflow.depend
 mutate = default_workflow.mutate
+set_config = default_workflow.set_config
 
 
 def bind(fn, args=None, kw=None):
@@ -227,3 +237,27 @@ def bind(fn, args=None, kw=None):
     #     extra_kw = {}
 
     return partial(fn, *args, **partial_kw)
+
+
+
+def rformat(cfg: list|dict|str, **kw):
+    """
+    Recursively format content of cfg with kw (in-place!)
+    """
+    # Dict: handle keys and values
+    if isinstance(cfg, dict):
+        for key in list(cfg):
+            if (fmt_key := rformat(key, **kw)) != key:
+                cfg[fmt_key] = cfg.pop(key)
+
+        for key, value in cfg.items():
+            cfg[key] = rformat(value, **kw)
+    # List
+    if isinstance(cfg, list):
+        cfg = [rformat(item, **kw) for item in cfg]
+
+    # Simple string
+    if isinstance(cfg, str):
+        cfg = cfg.format(**kw)
+
+    return cfg

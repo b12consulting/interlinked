@@ -22,15 +22,12 @@ def test_add_simple_route():
 
 
 def test_add_parameterized_route():
-    routes = {
+    router = Router()
+    router.add_routes({
         '{one}': lambda one: one,
         'one.{two}': lambda two: two,
         'one.{two}.{three}': lambda two, three: (two, three),
-    }
-
-    router = Router()
-    for key, value in routes.items():
-        router.add(key, value)
+    })
 
     fn, kw = router.match('a')
     assert fn(**kw) == 'a'
