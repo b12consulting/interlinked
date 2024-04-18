@@ -34,6 +34,7 @@ def run_cmd(args):
 def load_conf(path):
     if path.endswith(".toml"):
         import toml
+
         return toml.load(path)
     elif path.endswith(".json"):
         return json.load(open(path))
@@ -97,43 +98,38 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "source", help="ressource to load in the form of file_name (without the .py) "
-        "or file_name:workflow_name",
+        "source",
+        help="ressource to load in the form of 'file_name' (without the .py), 'folder.file'  "
+        "or 'file_name:workflow_variable'",
     )
     parser.add_argument(
         "-v", "--verbose", action="count", default=0, help="Increase verbosity"
     )
     subparsers = parser.add_subparsers(dest="command")
 
-    parser_deps = subparsers.add_parser(
-        "deps", description="Show dependencies")
+    parser_deps = subparsers.add_parser("deps", description="Show dependencies")
     parser_deps.set_defaults(func=deps)
 
-    parser_version = subparsers.add_parser(
-        "version", description="Print version")
+    parser_version = subparsers.add_parser("version", description="Print version")
     parser_version.set_defaults(func=lambda a: print(__version__))
 
-    parser_validate = subparsers.add_parser(
-        "validate", description="Validate Workflow")
+    parser_validate = subparsers.add_parser("validate", description="Validate Workflow")
     parser_validate.add_argument(
-        "-n", "--name", default="default_workflow", help="Workflow name",
+        "-n",
+        "--name",
+        default="default_workflow",
+        help="Workflow name",
     )
     parser_validate.set_defaults(func=validate)
 
-    parser_run = subparsers.add_parser(
-        "run", description="Print run")
-    parser_run.add_argument(
-        "-s", "--show", action="store_true", help="Show output"
-    )
-    parser_run.add_argument(
-        "-c", "--config", help="Load parameters from config"
-    )
-    parser_run.add_argument(
-        "targets", nargs="*", help="Run given targets"
-    )
+    parser_run = subparsers.add_parser("run", description="Print run")
+    parser_run.add_argument("-s", "--show", action="store_true", help="Show output")
+    parser_run.add_argument("-c", "--config", help="Load parameters from config")
+    parser_run.add_argument("targets", nargs="*", help="Run given targets")
     parser_run.set_defaults(func=run_cmd)
 
     args = parser.parse_args()
+
     if args.verbose == 1:
         logger.setLevel("INFO")
     elif args.verbose > 1:

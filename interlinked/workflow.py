@@ -1,16 +1,15 @@
+from typing import Optional
 from collections import defaultdict
 from functools import partial
 from inspect import signature, Signature
 from itertools import chain
 
 from interlinked import Router
-from interlinked.exceptions import (
-    NoRootException, LoopException, UnknownDependency)
+from interlinked.exceptions import NoRootException, LoopException, UnknownDependency
 
 
 class Item:
-
-    def __init__(self, pattern, workflow, kw=None):
+    def __init__(self, pattern: str, workflow: "Workflow", kw: Optional[dict] = None):
         self.pattern = pattern
         self.workflow = workflow
         self.fn = None
@@ -18,7 +17,7 @@ class Item:
         self.dependencies = {}
         self.mutators = {}
 
-    def __call__(self, fn):
+    def __call__(self, fn: callable):
         self.workflow.by_fn[fn].append(self)
         self.fn = fn
         return fn
@@ -32,7 +31,15 @@ class Workflow:
 
     _registry = {}
 
-    def __init__(self, name=None, router=None, by_fn=None, base_kw=None, resolve=None, config=None):
+    def __init__(
+        self,
+        name: Optional[str] = None,
+        router: Optional[Router] = None,
+        by_fn: Optional[dict[callable, list[Item]]] = None,
+        base_kw: Optional[dict] = None,
+        resolve: callable = None,
+        config: Optional[dict] = None,
+    ):
         if name:
             if name in Workflow._registry:
                 raise ValueError(f"Workflow {name} already defined!")
@@ -46,15 +53,15 @@ class Workflow:
         self.resolve = resolve or self.run
         self._validated = False
         self.config_router = Router()
-        self.set_config(config)
+        if config:
+            self.set_config(config)
 
     @classmethod
-    def get(self, name):
+    def get(self, name: str):
         return self._registry.get(name)
 
-    def set_config(self, config):
-        if config:
-            self.config_router = Router(**config)
+    def set_config(self, config: dict):
+        self.config_router = Router(**config)
 
     def validate(self):
         if self._validated:
@@ -80,9 +87,9 @@ class Workflow:
         self._validated = True
 
     def deps(self):
-        '''
+        """
         build {parent: [child]} dependency dictionary.
-        '''
+        """
         # Init dict
         p2c = {p: [] for p in self.router.routes}
         for pattern in self.router.routes:
@@ -104,7 +111,12 @@ class Workflow:
 
         return p2c
 
-    def clone(self, name=None, config=None, kw=None):
+    def clone(
+        self,
+        name: Optional[str] = None,
+        config: Optional[dict] = None,
+        kw: Optional[dict] = None,
+    ):
         kw = kw or {}
         config = config or self.config_router.routes.copy()
         new_wkf = Workflow(
@@ -119,10 +131,10 @@ class Workflow:
     def kw(self, **kw):
         return self.clone(kw=kw)
 
-    def config(self, config):
+    def config(self, config: dict):
         return self.clone(config=config)
 
-    def provide(self, pattern, **kw):
+    def provide(self, pattern: str, **kw):
         self._validated = False
         if pattern in self.router:
             msg = f"{pattern} already defined in Workflow '{self.name}'"
@@ -133,10 +145,12 @@ class Workflow:
 
     def depend(self, **dependencies):
         self._validated = False
+
         def decorator(fn):
             for item in self.by_fn[fn]:
                 item.depend(dependencies)
             return fn
+
         return decorator
 
     def mutate(self, **mutators):
@@ -144,24 +158,25 @@ class Workflow:
             for item in self.by_fn[fn]:
                 item.mutators = {**mutators, **item.mutators}
             return fn
+
         return decorator
 
-    def by_name(self, name):
-        '''
+    def by_name(self, name: str):
+        """
         Find a function that match the given name. Either because the
         exact name is found. Either through pattern matching. Returns
         a tuple containing the function, the parameters extracted by
         pattern matching and the dependencies needed by this function.
-        '''
+        """
         match = self.router.match(name)
         if not match:
             raise KeyError(f"No ressource found in workflow for '{name}'")
         # match contains an extra dict of kw, that contains values
         # used for pattern matching
         item, match_kw = match
-        return item, {**item.kw,  **match_kw}
+        return item, {**item.kw, **match_kw}
 
-    def run(self, resource_name, **extra_kw):
+    def run(self, resource_name: str, **extra_kw):
         # Search fn
         item, match_kw = self.by_name(resource_name)
         # Identify config item and apply auto-formating
@@ -197,10 +212,10 @@ mutate = default_workflow.mutate
 set_config = default_workflow.set_config
 
 
-def bind(fn, args=None, kw=None):
-    '''
+def bind(fn: callable, args=None, kw=None):
+    """
     Bind keyword parameters to the given function (if needed).
-    '''
+    """
 
     args = args or []
     kw = kw or {}
@@ -230,17 +245,10 @@ def bind(fn, args=None, kw=None):
     if not (args or partial_kw):
         return fn
 
-    # if has_var_kw:
-    #     # Inject unprocessed params
-    #     extra_kw = {k:v for k, v in kw.items() if k not in partial_kw}
-    # else:
-    #     extra_kw = {}
-
     return partial(fn, *args, **partial_kw)
 
 
-
-def rformat(cfg: list|dict|str, **kw):
+def rformat(cfg: list | dict | str, **kw):
     """
     Recursively format content of cfg with kw (in-place!)
     """

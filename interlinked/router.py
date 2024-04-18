@@ -1,35 +1,36 @@
 from collections import namedtuple, defaultdict
+from typing import Any
 import re
 
-Match = namedtuple('Match', ['value', 'kw'])
+
+Match = namedtuple("Match", ["value", "kw"])
 ID_PATTERN = "[a-zA-Z][a-zA-Z0-9_]*"
 PARAM_REGEX = re.compile("{(" + ID_PATTERN + ")}")
 
 
 class Router:
-
-    def __init__(self, **routes):
+    def __init__(self, **routes: dict[str, Any]):
         self.routes = defaultdict(set)
         self.add_routes(routes)
 
-    def add_routes(self, routes):
+    def add_routes(self, routes: dict[str, Any]):
         for path, value in routes.items():
             self.add(path, value)
 
     def clone(self):
-        '''
+        """
         Return a proper copy of the current router.
-        '''
+        """
         # Unpack value tuples and pass results to constructor
         router = Router()
         router.routes = self.routes.copy()
         return router
 
-    def add(self, path, value):
-        '''
+    def add(self, path: str, value: Any):
+        """
         Add the given value under the key containing the parameterized
         path.
-        '''
+        """
         if "{}" in path:
             msg = "Anonymous pattern '{}' is not supported (in %s)"
             raise ValueError(msg % path)
@@ -37,15 +38,15 @@ class Router:
         idx = 0
         path_regex = "^"
         for match in PARAM_REGEX.finditer(path):
-            param_name, = match.groups()
-            path_regex += re.escape(path[idx: match.start()])
+            (param_name,) = match.groups()
+            path_regex += re.escape(path[idx : match.start()])
             path_regex += f"(?P<{param_name}>{ID_PATTERN})"
             idx = match.end()
 
         path_regex += re.escape(path[idx:].split(":")[0]) + "$"
         self.routes[path] = (re.compile(path_regex), value)
 
-    def match(self, key):
+    def match(self, key: str):
         """
         Return a tuple (value, match dict) if key is found. Return None if
         not.
@@ -63,7 +64,7 @@ class Router:
             return Match(value, m.groupdict())
         return None
 
-    def get(self, key, default=None):
+    def get(self, key: str, default: Any = None):
         """
         Helper method that simply return value associated to the matched
         key, or default if the key is not known.
@@ -73,5 +74,5 @@ class Router:
             return default
         return res[0]
 
-    def __contains__(self, key):
+    def __contains__(self, key: str):
         return key in self.routes

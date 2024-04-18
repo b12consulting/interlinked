@@ -3,16 +3,16 @@ from interlinked.workflow import rformat, set_config, provide, run
 
 def test_fmt_dict():
     # on key
-    d = {"ham-{spam}": 1}
-    assert rformat(d, spam="SPAM") == {"ham-SPAM": 1}
+    d = {"ham-{spam}": "one"}
+    assert rformat(d, spam="SPAM") == {"ham-SPAM": "one"}
     # on value
     d = {"ham-spam": "foo-{bar}"}
     assert rformat(d, bar="BAR") == {"ham-spam": "foo-BAR"}
 
 
 def test_fmt_list():
-    d = ["ham-{spam}", 1]
-    assert rformat(d, spam="SPAM") == ["ham-SPAM", 1]
+    d = ["ham-{spam}", "one"]
+    assert rformat(d, spam="SPAM") == ["ham-SPAM", "one"]
 
 
 def test_fmt_str():
