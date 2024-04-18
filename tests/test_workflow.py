@@ -36,7 +36,7 @@ def test_run_with_depends():
     res = wkf.run('many_echo')
     assert res == 'test test'
 
-    workflow_bis = wkf.clone(repeat=3, name="test")
+    workflow_bis = wkf.kw(repeat=3, name="test")
     res = workflow_bis.run('many_echo')
     assert res == 'test test test'
 

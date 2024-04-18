@@ -2,6 +2,8 @@
 from interlinked import Workflow
 
 wkf = Workflow("test-mutate")
+
+
 @wkf.mutate(prefix=lambda prefix: prefix.upper())
 @wkf.provide('{prefix}.echo')
 @wkf.mutate(suffix=lambda prefix, suffix: prefix + suffix)
