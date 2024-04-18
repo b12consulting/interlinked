@@ -1,5 +1,6 @@
 import argparse
 import logging
+import json
 from importlib.machinery import SourceFileLoader
 
 from .exceptions import InterlinkedException
@@ -34,8 +35,11 @@ def load_conf(path):
     if path.endswith(".toml"):
         import toml
         return toml.load(path)
+    elif path.endswith(".json"):
+        return json.load(open(path))
     else:
-        raise ValueError("File type not supported (only toml for now)")
+        raise ValueError("File type not supported (should be json or toml)")
+
 
 def find_workflow(args):
     src = args.source
