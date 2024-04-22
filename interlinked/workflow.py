@@ -80,7 +80,11 @@ class Workflow:
         children = deps[parent]
         for child in children:
             if child in ancestors:
-                raise ValueError("Loopy loop!")
+                msg = (
+                    f'Loop detected in workflow "{self.name}" '
+                    f'(validation failed when evaluating "{child}")'
+                )
+                raise LoopException(msg)
             self._validate(child, deps, ancestors + (child,))
 
 

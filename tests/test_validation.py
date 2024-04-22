@@ -1,5 +1,7 @@
 import pytest
 from interlinked import depend, provide, default_workflow
+from interlinked.exceptions import LoopException
+
 
 # Create a graph that looks like
 # A
@@ -36,16 +38,16 @@ def test_diamond():
 
 
 def test_direct_loop():
-    wkf = default_workflow.clone()
+    wkf = default_workflow.clone(name="test-1")
     # Add new link C -> D
     wkf.depend(d="d")(fn_c)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(LoopException):
         wkf.validate()
 
 
 def test_indirect_loop():
-    wkf = default_workflow.clone()
+    wkf = default_workflow.clone(name="test-2")
     # Add new links D -> E -> A
     wkf.depend(d="d")
     wkf.provide("e")
@@ -54,7 +56,7 @@ def test_indirect_loop():
 
     wkf.depend(e="e")(fn_a)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(LoopException):
         wkf.validate()
 
 
