@@ -32,6 +32,9 @@ def run_cmd(args):
 
 
 def load_conf(path):
+    if path is None:
+        return None
+
     if path.endswith(".toml"):
         import toml
 
