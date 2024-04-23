@@ -41,3 +41,28 @@ def test_add_parameterized_route():
     # not ok routes
     for route in ('spam.b.c', 'one.b.c.d'):
         assert not router.match(route)
+
+
+def test_param_type():
+    router = Router()
+    router.add_routes({
+        'one/{one:int}': lambda one: one,
+        'two/{two:str}': lambda two: two,
+        '/root/{parents:path}/{name}.{ext}':
+          lambda parents, name, ext: [parents, name, ext],
+    })
+
+    # "one/" match an int
+    fn, kw = router.match('one/10')
+    assert fn(**kw) == "10"  # -> still a string, no cast implemented yet
+
+    # 'ten' does not match an int
+    assert None == router.match('one/ten')
+
+    # Base case: a simple string
+    fn, kw = router.match('two/two')
+    assert fn(**kw) == "two"
+
+    # Base case: a path
+    fn, kw = router.match('/root/some/path/file.txt')
+    assert ["some/path", "file", "txt"]
