@@ -72,19 +72,21 @@ class Workflow:
         if not roots:
             raise NoRootException(f"No roots for workflow '{self.name}'")
 
-        ancestors = level = roots.copy()
-        while level:
-            new_level = set()
-            for parent in level:
-                children = deps[parent]
-                if any(c in ancestors for c in children):
-                    msg = f"Loop detected in workflow '{self.name}'!"
-                    raise LoopException(msg)
-                new_level |= set(children)
-            level = set(new_level)
-            ancestors |= new_level
-
+        for root in roots:
+            self._validate(root, deps, ancestors=tuple())
         self._validated = True
+
+    def _validate(self, parent, deps, ancestors):
+        children = deps[parent]
+        for child in children:
+            if child in ancestors:
+                msg = (
+                    f'Loop detected in workflow "{self.name}" '
+                    f'(validation failed when evaluating "{child}")'
+                )
+                raise LoopException(msg)
+            self._validate(child, deps, ancestors + (child,))
+
 
     def deps(self):
         """
