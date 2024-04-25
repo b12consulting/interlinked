@@ -4,7 +4,7 @@ import re
 
 
 Match = namedtuple("Match", ["value", "kw"])
-ID_PATTERN = "[a-zA-Z][a-zA-Z0-9_]*"
+ID_PATTERN = "[a-zA-Z0-9_-]+"
 PARAM_REGEX = re.compile("{(" + ID_PATTERN + ")}")
 
 
