@@ -4,11 +4,12 @@ import re
 
 
 Match = namedtuple("Match", ["value", "kw"])
-ID_PATTERN = "[a-zA-Z][a-zA-Z0-9:]+"
+ID_PATTERN = "[a-zA-Z][a-zA-Z0-9:]*"
 VALUE_PATTERNS = {
+    "identifier": "[a-zA-Z][a-zA-Z0-9_]*",
     "str": "[a-zA-Z0-9:.-]+",
     "int": "[-+]?[0-9]+",
-    "path": "[a-zA-Z0-9:.-/]+",
+    "path": "[a-zA-Z0-9.-/]+",
 }
 PARAM_REGEX = re.compile("{(" + ID_PATTERN + ")}")
 
@@ -47,9 +48,9 @@ class Router:
             if ":" in param_name:
                 param_name, param_type = param_name.split(":")
             else:
-                param_type = "str"
+                param_type = "identifier"
 
-            ptrn = VALUE_PATTERNS.get(param_type, VALUE_PATTERNS["str"])
+            ptrn = VALUE_PATTERNS.get(param_type, VALUE_PATTERNS["identifier"])
 
             path_regex += re.escape(path[idx : match.start()])
             path_regex += f"(?P<{param_name}>{ptrn})"
