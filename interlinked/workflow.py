@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 from collections import defaultdict
 from functools import partial
 from inspect import signature, Signature
@@ -29,7 +29,7 @@ class Item:
 
 class Workflow:
 
-    _registry = {}
+    _registry: dict[str, "Workflow"] = {}
 
     def __init__(
         self,
@@ -57,8 +57,8 @@ class Workflow:
             self.set_config(config)
 
     @classmethod
-    def get(self, name: str):
-        return self._registry.get(name)
+    def get(cls, name: str) -> "Workflow | None":
+        return cls._registry.get(name)
 
     def set_config(self, config: dict):
         self.config_router = Router(**config)
@@ -86,7 +86,6 @@ class Workflow:
                 )
                 raise LoopException(msg)
             self._validate(child, deps, ancestors + (child,))
-
 
     def deps(self):
         """
@@ -178,7 +177,7 @@ class Workflow:
         item, match_kw = match
         return item, {**item.kw, **match_kw}
 
-    def run(self, resource_name: str, **extra_kw):
+    def run(self, resource_name: str, **extra_kw) -> Any:
         # Search fn
         item, match_kw = self.by_name(resource_name)
         # Identify config item and apply auto-formating
@@ -193,7 +192,12 @@ class Workflow:
                 raise RuntimeError("Missing resolve function on workflow")
 
             for alias, ressource in item.dependencies.items():
-                ressource = ressource.format(**kw)
+                try:
+                    ressource = ressource.format(**kw)
+                except KeyError as e:
+                    raise KeyError(
+                        f"Missing key '{e}' in workflow '{self.name}' for resource '{ressource}' and available kwargs: {kw}"
+                    )
                 read = bind(self.resolve, [ressource], extra_kw)
                 kw[alias] = read()
 
