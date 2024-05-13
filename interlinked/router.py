@@ -2,10 +2,24 @@ from collections import namedtuple, defaultdict
 from typing import Any
 import re
 
+# From the re module doc:
+#     Ranges of characters can be indicated by giving two characters and
+#     separating them by a '-', for example [a-z] will match any lowercase
+#     ASCII letter, [0-5][0-9] will match all the two-digits numbers from 00
+#     to 59, and [0-9A-Fa-f] will match any hexadecimal digit. If - is
+#     escaped (e.g. [a\-z]) or if it’s placed as the first or last character
+#     (e.g. [-a] or [a-]), it will match a literal '-'.
 
 Match = namedtuple("Match", ["value", "kw"])
-ID_PATTERN = "[a-zA-Z][a-zA-Z0-9_]*"
-PARAM_REGEX = re.compile("{(" + ID_PATTERN + ")}")
+ID_PATTERN = "[a-z][a-z0-9:_]+"
+VALUE_PATTERNS = {
+    "identifier": "[a-z][a-z0-9_]*",
+    "str": "[a-z0-9:._-]+",
+    "int": "[-+]?[0-9]+",
+    "path": "[a-z0-9./_-]+",
+    "uuid": "[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}-?[89ab][a-f0-9]{3}-?[a-f0-9]{12}",
+}
+PARAM_REGEX = re.compile("{(" + ID_PATTERN + ")}", re.I)
 
 
 class Router:
@@ -39,12 +53,19 @@ class Router:
         path_regex = "^"
         for match in PARAM_REGEX.finditer(path):
             (param_name,) = match.groups()
+            if ":" in param_name:
+                param_name, param_type = param_name.split(":")
+            else:
+                param_type = "str"
+
+            ptrn = VALUE_PATTERNS.get(param_type, VALUE_PATTERNS["str"])
+
             path_regex += re.escape(path[idx : match.start()])
-            path_regex += f"(?P<{param_name}>{ID_PATTERN})"
+            path_regex += f"(?P<{param_name}>{ptrn})"
             idx = match.end()
 
         path_regex += re.escape(path[idx:].split(":")[0]) + "$"
-        self.routes[path] = (re.compile(path_regex), value)
+        self.routes[path] = (re.compile(path_regex, re.I), value)
 
     def match(self, key: str):
         """
