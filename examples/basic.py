@@ -2,14 +2,14 @@ from interlinked import run, provide, depend
 
 
 @provide('echo')
-@provide('echo.{name}')
+@provide('echo.{name}', 'echo-bis.{name}')
 def echo(name='default'):
-    return name
+    return name, name + "-bis"
 
 
-@depend(value='echo.test')
+@depend(value='echo.test', value_bis="echo-bis.test")
 @provide('many_echo')
-def many_echo(value, repeat=2):
+def many_echo(value, value_bis, repeat=2):
     return ' '.join([value] * repeat)
 
 result = run("echo.spam")

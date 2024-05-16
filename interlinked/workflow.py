@@ -1,6 +1,6 @@
 from typing import Optional
 from collections import defaultdict
-from functools import partial
+from functools import partial, lru_cache
 from inspect import signature, Signature
 from itertools import chain
 
@@ -8,9 +8,14 @@ from interlinked import Router
 from interlinked.exceptions import NoRootException, LoopException, UnknownDependency
 
 
-class Item:
-    def __init__(self, pattern: str, workflow: "Workflow", kw: Optional[dict] = None):
-        self.pattern = pattern
+class Cell:
+    """
+    A cell is a node in the workflow it associate one or more
+    pattern to a function and keep track of its dependencies.
+    """
+
+    def __init__(self, workflow: "Workflow", patterns: tuple[str],  kw: Optional[dict] = None):
+        self.patterns = patterns
         self.workflow = workflow
         self.fn = None
         self.kw = kw or {}
@@ -35,9 +40,8 @@ class Workflow:
         self,
         name: Optional[str] = None,
         router: Optional[Router] = None,
-        by_fn: Optional[dict[callable, list[Item]]] = None,
+        by_fn: Optional[dict[callable, list[Cell]]] = None,
         base_kw: Optional[dict] = None,
-        resolve: callable = None,
         config: Optional[dict] = None,
     ):
         if name:
@@ -50,7 +54,6 @@ class Workflow:
         self.by_fn.update(by_fn or {})
         self.base_kw = {}
         self.base_kw.update(base_kw or {})
-        self.resolve = resolve or self.run
         self._validated = False
         self.config_router = Router()
         if config:
@@ -94,8 +97,8 @@ class Workflow:
         p2c = {p: [] for p in self.router.routes}
         for pattern in self.router.routes:
             match = self.router.match(pattern)
-            item = match.value
-            parents = item.dependencies.values()
+            cell = match.value
+            parents = cell.dependencies.values()
             for parent in parents:
                 if parent not in p2c:
                     # Try pattern matching
@@ -134,29 +137,31 @@ class Workflow:
     def config(self, config: dict):
         return self.clone(config=config)
 
-    def provide(self, pattern: str, **kw):
+    def provide(self, *patterns: str, **kw):
         self._validated = False
-        if pattern in self.router:
-            msg = f"{pattern} already defined in Workflow '{self.name}'"
-            raise ValueError(msg)
-        item = Item(pattern, self, kw)
-        self.router.add(pattern, item)
-        return item
+        for pattern in patterns:
+            if pattern in self.router:
+                msg = f"{pattern} already defined in Workflow '{self.name}'"
+                raise ValueError(msg)
+        cell = Cell(self, patterns, kw)
+        for pattern in patterns:
+            self.router.add(pattern, cell)
+        return cell
 
     def depend(self, **dependencies):
         self._validated = False
 
         def decorator(fn):
-            for item in self.by_fn[fn]:
-                item.depend(dependencies)
+            for cell in self.by_fn[fn]:
+                cell.depend(dependencies)
             return fn
 
         return decorator
 
     def mutate(self, **mutators):
         def decorator(fn):
-            for item in self.by_fn[fn]:
-                item.mutators = {**mutators, **item.mutators}
+            for cell in self.by_fn[fn]:
+                cell.mutators = {**mutators, **cell.mutators}
             return fn
 
         return decorator
@@ -173,34 +178,46 @@ class Workflow:
             raise KeyError(f"No ressource found in workflow for '{name}'")
         # match contains an extra dict of kw, that contains values
         # used for pattern matching
-        item, match_kw = match
-        return item, {**item.kw, **match_kw}
+        cell, match_kw = match
+        return cell, {**cell.kw, **match_kw}
 
     def run(self, resource_name: str, **extra_kw):
+        """
+        Create a Run instance and execute it
+        """
+        return Run(self, **extra_kw).resolve(resource_name)
+
+
+class Run:
+
+    def __init__(self, wkf, **extra_kw):
+        self.wkf = wkf
+        self.extra_kw = extra_kw
+        # Cache at instance level
+        self.resolve = lru_cache(self.resolve)
+
+    def resolve(self, resource_name):
         # Search fn
-        item, match_kw = self.by_name(resource_name)
-        # Identify config item and apply auto-formating
-        config_entry = self.config_router.get(resource_name, {})
+        cell, match_kw = self.wkf.by_name(resource_name)
+        # Identify config cell and apply auto-formating
+        config_entry = self.wkf.config_router.get(resource_name, {})
         if config_entry:
             config_entry = rformat(config_entry, **match_kw)
 
-        kw = {**self.base_kw, **match_kw, **extra_kw, **config_entry}
+        kw = {**self.wkf.base_kw, **match_kw, **self.extra_kw, **config_entry}
         # Resolve dependencies
-        if item.dependencies:
-            if not self.resolve:
-                raise RuntimeError("Missing resolve function on workflow")
-
-            for alias, ressource in item.dependencies.items():
+        if cell.dependencies:
+            for alias, ressource in cell.dependencies.items():
                 ressource = ressource.format(**kw)
-                read = bind(self.resolve, [ressource], extra_kw)
+                read = bind(self.resolve, [ressource])
                 kw[alias] = read()
 
         # Mutate parameters
-        for alias, fn in item.mutators.items():
+        for alias, fn in cell.mutators.items():
             kw[alias] = bind(fn, kw=kw)()
 
         # Run function
-        return bind(item.fn, kw=kw)()
+        return bind(cell.fn, kw=kw)()
 
 
 # Define shortcuts
@@ -262,7 +279,7 @@ def rformat(cfg: list | dict | str, **kw):
             cfg[key] = rformat(value, **kw)
     # List
     if isinstance(cfg, list):
-        cfg = [rformat(item, **kw) for item in cfg]
+        cfg = [rformat(cell, **kw) for cell in cfg]
 
     # Simple string
     if isinstance(cfg, str):
