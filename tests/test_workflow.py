@@ -19,16 +19,6 @@ def many_echo(value, repeat=2):
     return " ".join([value] * repeat)
 
 
-@wkf.provide("logged.{name}")
-def logged(name):
-    LOGS[name] += 1
-    return name
-
-
-@wkf.depend(first="logged.{name}", second="logged.{name}")
-@wkf.provide("logged-repeater.{name}")
-def logged_repeater(first, second):
-    return first + second
 
 
 def test_run_no_depends():
@@ -56,6 +46,18 @@ def test_run_with_depends():
     assert res == "test test test"
 
 
+@wkf.provide("logged.{name}")
+def logged(name):
+    LOGS[name] += 1
+    return name
+
+
+@wkf.depend(first="logged.{name}", second="logged.{name}")
+@wkf.provide("logged-repeater.{name}")
+def logged_repeater(first, second):
+    return first + second
+
+
 def test_run_cache():
     # Distinct runs
     wkf.run("logged.ham")
@@ -66,3 +68,25 @@ def test_run_cache():
     # Commnon run
     assert wkf.run("logged-repeater.foo") == "foofoo"
     assert LOGS == {"ham": 2, "spam": 1, "foo": 1}
+    LOGS.clear()
+
+
+@wkf.provide("upper.{name}", "lower.{name}")
+def multi(name):
+    LOGS["multi"] += 1
+    return name.upper(), name.lower()
+
+
+@wkf.depend(upper="upper.{name}", lower="lower.{name}")
+@wkf.provide("upper-and-lower.{name}")
+def up_and_low(upper, lower):
+    return upper + lower
+
+
+def test_multi_provide():
+    # Distinct runs
+    assert wkf.run("upper-and-lower.spam") == "SPAMspam"
+    assert LOGS["multi"] == 1
+    assert wkf.run("upper-and-lower.FOO") == "FOOfoo"
+    assert LOGS["multi"] == 2
+    LOGS.clear()

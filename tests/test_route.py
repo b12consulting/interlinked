@@ -31,13 +31,16 @@ def test_add_parameterized_route():
         }
     )
 
-    fn, kw = router.match("a")
+    match = router.match("a")
+    fn, kw = match.value, match.kw
     assert fn(**kw) == "a"
 
-    fn, kw = router.match("one.b")
+    match = router.match("one.b")
+    fn, kw = match.value, match.kw
     assert fn(**kw) == "b"
 
-    fn, kw = router.match("one.b.c")
+    match = router.match("one.b.c")
+    fn, kw = match.value, match.kw
     assert fn(**kw) == ("b", "c")
 
     # not ok routes
@@ -63,18 +66,21 @@ def test_param_type():
     )
 
     # "one/" match an int
-    fn, kw = router.match("one/10")
+    match = router.match("one/10")
+    fn, kw = match.value, match.kw
     assert fn(**kw) == "10"  # -> still a string, no cast implemented yet
 
     # 'ten' does not match an int
     assert None == router.match("one/ten")
 
     # Match simple string
-    fn, kw = router.match("two/two")
+    match = router.match("two/two")
+    fn, kw = match.value, match.kw
     assert fn(**kw) == "two"
 
     # Match path
-    fn, kw = router.match("/three/some/path/file.txt")
+    match = router.match("/three/some/path/file.txt")
+    fn, kw = match.value, match.kw
     assert ["some/path", "file", "txt"]
 
     # Match an uuid
@@ -83,13 +89,16 @@ def test_param_type():
         "40b4550b-f1dd-4846-bc70-d8f5f235e72b",
     ]
     for uuid in uuids:
-        fn, kw = router.match("four/" + uuid)
+        match = router.match("four/" + uuid)
+        fn, kw = match.value, match.kw
         assert fn(**kw) == uuid
 
     # with ambiguity on _
-    fn, kw = router.match("five_one_two_three")
+    match = router.match("five_one_two_three")
+    fn, kw = match.value, match.kw
     assert fn(**kw) == ("one_two", "three")
 
     # with ambiguity on - (but we specify uuid param)
-    fn, kw = router.match("six_one-40b4550b-f1dd-4846-bc70-d8f5f235e72b")
+    match = router.match("six_one-40b4550b-f1dd-4846-bc70-d8f5f235e72b")
+    fn, kw = match.value, match.kw
     assert fn(**kw) == ("one", "40b4550b-f1dd-4846-bc70-d8f5f235e72b")

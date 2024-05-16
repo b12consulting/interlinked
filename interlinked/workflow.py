@@ -1,10 +1,10 @@
 from typing import Optional
 from collections import defaultdict
-from functools import partial, lru_cache
+from functools import partial
 from inspect import signature, Signature
 from itertools import chain
 
-from interlinked import Router
+from interlinked.router import Router, Match
 from interlinked.exceptions import NoRootException, LoopException, UnknownDependency
 
 
@@ -15,7 +15,7 @@ class Cell:
     """
 
     def __init__(
-        self, workflow: "Workflow", patterns: tuple[str], kw: Optional[dict] = None
+        self, workflow: "Workflow", patterns: tuple[str, ...], kw: Optional[dict] = None
     ):
         self.patterns = patterns
         self.workflow = workflow
@@ -106,7 +106,7 @@ class Workflow:
                     # Try pattern matching
                     match = self.router.match(parent)
                     if match:
-                        parent = match.value.pattern
+                        parent = match.route
                     else:
                         raise UnknownDependency(
                             f"Dependency '{parent}' is not known "
@@ -168,7 +168,7 @@ class Workflow:
 
         return decorator
 
-    def by_name(self, name: str):
+    def by_name(self, name: str) -> Match:
         """
         Find a function that match the given name. Either because the
         exact name is found. Either through pattern matching. Returns
@@ -180,8 +180,7 @@ class Workflow:
             raise KeyError(f"No ressource found in workflow for '{name}'")
         # match contains an extra dict of kw, that contains values
         # used for pattern matching
-        cell, match_kw = match
-        return cell, {**cell.kw, **match_kw}
+        return match
 
     def run(self, resource_name: str, **extra_kw):
         """
@@ -195,18 +194,22 @@ class Run:
         self.wkf = wkf
         self.extra_kw = extra_kw
         # Cache at instance level
-        self.resolve = lru_cache(self.resolve)
+        self.cache = {}
 
     def resolve(self, resource_name):
+        if res := self.cache.get(resource_name):
+            return res
+
         # Search fn
-        cell, match_kw = self.wkf.by_name(resource_name)
+        match = self.wkf.by_name(resource_name)
         # Identify config cell and apply auto-formating
         config_entry = self.wkf.config_router.get(resource_name, {})
         if config_entry:
-            config_entry = rformat(config_entry, **match_kw)
+            config_entry = rformat(config_entry, **match.kw)
 
-        kw = {**self.wkf.base_kw, **match_kw, **self.extra_kw, **config_entry}
+        kw = {**self.wkf.base_kw, **match.kw, **self.extra_kw, **config_entry}
         # Resolve dependencies
+        cell = match.value
         if cell.dependencies:
             for alias, ressource in cell.dependencies.items():
                 ressource = ressource.format(**kw)
@@ -218,7 +221,18 @@ class Run:
             kw[alias] = bind(fn, kw=kw)()
 
         # Run function
-        return bind(cell.fn, kw=kw)()
+        res = bind(cell.fn, kw=kw)()
+
+        # Cache & return simple cell
+        if len(cell.patterns) == 1:
+            self.cache[resource_name] = res
+            return res
+
+        # If a cell contains multiple patterns (multi-provide
+        # decorator), extract the relevant one
+        for pattern, pattern_res in zip(cell.patterns, res):
+            self.cache[pattern.format(**match.kw)] = pattern_res
+        return res[cell.patterns.index(match.route)]
 
 
 # Define shortcuts
