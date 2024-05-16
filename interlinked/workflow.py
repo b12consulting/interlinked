@@ -14,7 +14,9 @@ class Cell:
     pattern to a function and keep track of its dependencies.
     """
 
-    def __init__(self, workflow: "Workflow", patterns: tuple[str],  kw: Optional[dict] = None):
+    def __init__(
+        self, workflow: "Workflow", patterns: tuple[str], kw: Optional[dict] = None
+    ):
         self.patterns = patterns
         self.workflow = workflow
         self.fn = None
@@ -189,7 +191,6 @@ class Workflow:
 
 
 class Run:
-
     def __init__(self, wkf, **extra_kw):
         self.wkf = wkf
         self.extra_kw = extra_kw

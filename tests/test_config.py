@@ -1,14 +1,11 @@
-
 from interlinked import Workflow
 
 
 cfg = {
-    "hello.{world}" : {
-        "param" : " from conf",
+    "hello.{world}": {
+        "param": " from conf",
     },
-    "hello.ham" : {
-        "param" : " FROM CONF"
-    }
+    "hello.ham": {"param": " FROM CONF"},
 }
 
 wkf = Workflow("My workflow", config=cfg, base_kw={"world": "from wkf"})
@@ -19,10 +16,11 @@ wkf = Workflow("My workflow", config=cfg, base_kw={"world": "from wkf"})
 def echo(world, param=""):
     return world + param
 
+
 def test_param_from_conf():
 
     res = wkf.run("hello.spam")
-    assert res  == "spam from conf"
+    assert res == "spam from conf"
 
     res = wkf.run("hello.ham")
     assert res == "ham FROM CONF"

@@ -6,33 +6,37 @@ from interlinked.exceptions import LoopException, UnknownDependency
 
 base = Workflow("base")
 
-@base.provide('first')
+
+@base.provide("first")
 def first(value):
     return value + other
 
-@base.depend(value='first')
-@base.provide('second')
+
+@base.depend(value="first")
+@base.provide("second")
 def second(value):
     return value
 
 
 loopy = Workflow("loopy")
 
-@loopy.depend(value='third', other="zero")
-@loopy.provide('first')
+
+@loopy.depend(value="third", other="zero")
+@loopy.provide("first")
 def first(value, other):
     return value + other
 
-@loopy.depend(value='first')
-@loopy.provide('second')
+
+@loopy.depend(value="first")
+@loopy.provide("second")
 def second(value):
     return value
 
-@loopy.depend(value='second')
-@loopy.provide('third')
+
+@loopy.depend(value="second")
+@loopy.provide("third")
 def third(value):
     return value
-
 
 
 def test_loop():
@@ -43,7 +47,7 @@ def test_loop():
     with pytest.raises(UnknownDependency):
         loopy.validate()
 
-    @loopy.provide('zero')
+    @loopy.provide("zero")
     def zero():
         return
 
