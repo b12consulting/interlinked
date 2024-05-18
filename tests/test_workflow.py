@@ -19,8 +19,6 @@ def many_echo(value, repeat=2):
     return " ".join([value] * repeat)
 
 
-
-
 def test_run_no_depends():
     res = wkf.run("echo")
     assert res == "default"
@@ -90,3 +88,20 @@ def test_multi_provide():
     assert wkf.run("upper-and-lower.FOO") == "FOOfoo"
     assert LOGS["multi"] == 2
     LOGS.clear()
+
+
+
+def test_run_match_type():
+    wkf = Workflow()
+
+    @wkf.provide("my-uuid.{name:uuid}", "my-id.{name:identifier}", "my-int.{name:int}")
+    def my_uuid(name="default"):
+        return name, name, name
+
+    res = wkf.run("my-uuid.40b4550b-f1dd-4846-bc70-d8f5f235e72b")
+    assert res == "40b4550b-f1dd-4846-bc70-d8f5f235e72b"
+
+    res = wkf.run("my-int.123")
+    assert res == "123"
+    res = wkf.run("my-id.abc")
+    assert res == "abc"

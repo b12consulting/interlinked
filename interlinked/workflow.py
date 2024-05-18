@@ -1,11 +1,15 @@
+from dataclasses import dataclass
 from typing import Optional
 from collections import defaultdict
 from functools import partial
 from inspect import signature, Signature
 from itertools import chain
+from string import Formatter
 
 from interlinked.router import Router, Match
 from interlinked.exceptions import NoRootException, LoopException, UnknownDependency
+
+
 
 
 class Cell:
@@ -17,7 +21,7 @@ class Cell:
     def __init__(
         self, workflow: "Workflow", patterns: tuple[str, ...], kw: Optional[dict] = None
     ):
-        self.patterns = patterns
+        self.patterns = [Pattern.from_string(p) for p in patterns]
         self.workflow = workflow
         self.fn = None
         self.kw = kw or {}
@@ -100,7 +104,7 @@ class Workflow:
         for pattern in self.router.routes:
             match = self.router.match(pattern)
             cell = match.value
-            parents = cell.dependencies.values()
+            parents = (p.pattern for p in cell.dependencies.values())
             for parent in parents:
                 if parent not in p2c:
                     # Try pattern matching
@@ -152,6 +156,9 @@ class Workflow:
 
     def depend(self, **dependencies):
         self._validated = False
+        if dependencies:
+            # convert pattern strings into objects
+            dependencies = {k: Pattern.from_string(v) for k, v in dependencies.items()}
 
         def decorator(fn):
             for cell in self.by_fn[fn]:
@@ -177,7 +184,7 @@ class Workflow:
         """
         match = self.router.match(name)
         if not match:
-            raise KeyError(f"No ressource found in workflow for '{name}'")
+            raise KeyError(f"No resource found in workflow for '{name}'")
         # match contains an extra dict of kw, that contains values
         # used for pattern matching
         return match
@@ -211,9 +218,9 @@ class Run:
         # Resolve dependencies
         cell = match.value
         if cell.dependencies:
-            for alias, ressource in cell.dependencies.items():
-                ressource = ressource.format(**kw)
-                read = bind(self.resolve, [ressource])
+            for alias, resource in cell.dependencies.items():
+                resource = resource.fmt(kw)
+                read = bind(self.resolve, [resource])
                 kw[alias] = read()
 
         # Mutate parameters
@@ -230,9 +237,11 @@ class Run:
 
         # If a cell contains multiple patterns (multi-provide
         # decorator), extract the relevant one
+        assert isinstance(res, tuple)
         for pattern, pattern_res in zip(cell.patterns, res):
-            self.cache[pattern.format(**match.kw)] = pattern_res
-        return res[cell.patterns.index(match.route)]
+            self.cache[pattern.fmt(match.kw)] = pattern_res
+        raw_patterns = [p.pattern for p in cell.patterns]
+        return res[raw_patterns.index(match.route)]
 
 
 # Define shortcuts
@@ -301,3 +310,36 @@ def rformat(cfg: list | dict | str, **kw):
         cfg = cfg.format(**kw)
 
     return cfg
+
+
+@dataclass
+class PatternField:
+    literal_text: str
+    field_name: str
+
+    def fmt(self, kw):
+        res = self.literal_text if self.literal_text else ""
+        if self.field_name is None:
+            return res
+        return res + kw[self.field_name]
+
+
+class Pattern:
+    formatter = Formatter()
+
+    def __init__(self, pattern: str, *fields: PatternField):
+        self.pattern = pattern
+        self.fields = fields
+
+    @classmethod
+    def from_string(cls, pattern: str) -> "Pattern":
+        fields = []
+        for literal_text, field_name, _, _ in cls.formatter.parse(pattern):
+            fields.append(PatternField(literal_text, field_name))
+        return Pattern(pattern, *fields)
+
+    def fmt(self, kw):
+        return "".join(f.fmt(kw) for f in self.fields)
+
+    def __repr__(self):
+        return f"<Pattern {self.pattern}>"
