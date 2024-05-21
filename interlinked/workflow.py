@@ -323,7 +323,7 @@ class PatternField:
             return res
         return res + kw[self.field_name]
 
-
+# see https://github.com/python/cpython/blob/3.12/Lib/string.py
 class Pattern:
     formatter = Formatter()
 

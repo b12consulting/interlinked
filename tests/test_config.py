@@ -2,7 +2,7 @@ from interlinked import Workflow
 
 
 cfg = {
-    "hello.{world}": {
+    "hello.{world:identifier}": {
         "param": " from conf",
     },
     "hello.ham": {"param": " FROM CONF"},
