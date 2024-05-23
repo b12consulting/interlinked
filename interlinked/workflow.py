@@ -10,8 +10,6 @@ from interlinked.router import Router, Match
 from interlinked.exceptions import NoRootException, LoopException, UnknownDependency
 
 
-
-
 class Cell:
     """
     A cell is a node in the workflow it associate one or more
@@ -204,7 +202,7 @@ class Run:
         self.cache = {}
 
     def resolve(self, resource_name):
-        if res := self.cache.get(resource_name):
+        if (res := self.cache.get(resource_name)) is not None:
             return res
 
         # Search fn
@@ -322,6 +320,7 @@ class PatternField:
         if self.field_name is None:
             return res
         return res + kw[self.field_name]
+
 
 # see https://github.com/python/cpython/blob/3.12/Lib/string.py
 class Pattern:
