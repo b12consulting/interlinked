@@ -5,9 +5,13 @@ from functools import partial
 from inspect import signature, Signature
 from itertools import chain
 from string import Formatter
+import time
+import logging
 
 from interlinked.router import Router, Match
 from interlinked.exceptions import NoRootException, LoopException, UnknownDependency
+
+logger = logging.getLogger("interlinked")
 
 
 class Cell:
@@ -226,7 +230,14 @@ class Run:
             kw[alias] = bind(fn, kw=kw)()
 
         # Run function
+        logger.debug(f"Workflow {self.wkf.name} running {cell.fn.__name__}")
+
+        start_time = time.time()
         res = bind(cell.fn, kw=kw)()
+        end_time = time.time()
+
+        execution_time = end_time - start_time
+        logger.debug(f"Call of {cell.fn.__name__} took {execution_time:.3f}s")
 
         # Cache & return simple cell
         if len(cell.patterns) == 1:
