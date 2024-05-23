@@ -221,7 +221,12 @@ class Run:
         cell = match.value
         if cell.dependencies:
             for alias, resource in cell.dependencies.items():
-                resource = resource.fmt(kw)
+                try:
+                    resource = resource.fmt(kw)
+                except KeyError as e:
+                    raise KeyError(
+                        f"Missing dependency {resource} for {resource_name} in workflow {self.wkf.name}"
+                    ) from e
                 read = bind(self.resolve, [resource])
                 kw[alias] = read()
 
