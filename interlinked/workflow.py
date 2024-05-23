@@ -42,7 +42,7 @@ class Workflow:
 
     def __init__(
         self,
-        name: Optional[str] = None,
+        name: str,
         router: Optional[Router] = None,
         by_fn: Optional[dict[callable, list[Cell]]] = None,
         base_kw: Optional[dict] = None,
@@ -127,7 +127,7 @@ class Workflow:
         kw = kw or {}
         config = config or self.config_router.routes.copy()
         new_wkf = Workflow(
-            name=name,
+            name=name or self.name + "_clone",
             router=self.router.clone(),
             by_fn=self.by_fn,
             base_kw={**self.base_kw, **kw},

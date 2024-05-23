@@ -90,9 +90,8 @@ def test_multi_provide():
     LOGS.clear()
 
 
-
 def test_run_match_type():
-    wkf = Workflow()
+    wkf = Workflow("test_run_match_type")
 
     @wkf.provide("my-uuid.{name:uuid}", "my-id.{name:identifier}", "my-int.{name:int}")
     def my_uuid(name="default"):
