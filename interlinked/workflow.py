@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Callable, Optional
 from collections import defaultdict
 from functools import partial
 from inspect import signature, Signature
@@ -30,7 +30,7 @@ class Cell:
         self.dependencies = {}
         self.mutators = {}
 
-    def __call__(self, fn: callable):
+    def __call__(self, fn: Callable):
         self.workflow.by_fn[fn].append(self)
         self.fn = fn
         return fn
@@ -48,7 +48,7 @@ class Workflow:
         self,
         name: str,
         router: Optional[Router] = None,
-        by_fn: Optional[dict[callable, list[Cell]]] = None,
+        by_fn: Optional[dict[Callable, list[Cell]]] = None,
         base_kw: Optional[dict] = None,
         config: Optional[dict] = None,
     ):
@@ -68,8 +68,8 @@ class Workflow:
             self.set_config(config)
 
     @classmethod
-    def get(self, name: str):
-        return self._registry.get(name)
+    def get(cls, name: str) -> "Workflow | None":
+        return cls._registry.get(name)
 
     def set_config(self, config: dict):
         self.config_router = Router(**config)
@@ -205,7 +205,7 @@ class Run:
         # Cache at instance level
         self.cache = {}
 
-    def resolve(self, resource_name):
+    def resolve(self, resource_name) -> Any:
         if (res := self.cache.get(resource_name)) is not None:
             return res
 
@@ -267,7 +267,7 @@ mutate = default_workflow.mutate
 set_config = default_workflow.set_config
 
 
-def bind(fn: callable, args=None, kw=None):
+def bind(fn: Callable, args=None, kw=None):
     """
     Bind keyword parameters to the given function (if needed).
     """
