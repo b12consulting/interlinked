@@ -105,6 +105,7 @@ def test_param_type():
     fn, kw = match.value, match.kw
     assert fn(**kw) == ("one", "40b4550b-f1dd-4846-bc70-d8f5f235e72b")
 
+    # datetime with timezone
     match = router.match("seven_2021-01-01T12:00:00+02:00")
     fn, kw = match.value, match.kw
     dt = datetime.datetime.fromisoformat(fn(**kw))
@@ -116,4 +117,18 @@ def test_param_type():
         0,
         0,
         datetime.timezone(datetime.timedelta(hours=2)),
+    )
+
+    # naive datetime
+    match = router.match("seven_2021-01-01T12:00:00")
+    fn, kw = match.value, match.kw
+    dt = datetime.datetime.fromisoformat(fn(**kw))
+    assert (dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second, dt.tzinfo) == (
+        2021,
+        1,
+        1,
+        12,
+        0,
+        0,
+        None
     )
