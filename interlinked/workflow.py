@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from typing import Optional
 from collections import defaultdict
@@ -6,8 +7,8 @@ from inspect import signature, Signature
 from itertools import chain
 from string import Formatter
 
-from interlinked.router import Router, Match
-from interlinked.exceptions import NoRootException, LoopException, UnknownDependency
+from interlinked.router import Router, Match, VALUE_PATTERNS
+from interlinked.exceptions import NoRootException, LoopException, UnknownDependency, InvalidValue
 
 
 
@@ -307,7 +308,8 @@ def rformat(cfg: list | dict | str, **kw):
 
     # Simple string
     if isinstance(cfg, str):
-        cfg = cfg.format(**kw)
+        ptrn = Pattern.from_string(cfg)
+        cfg = ptrn.fmt(kw)
 
     return cfg
 
@@ -315,13 +317,21 @@ def rformat(cfg: list | dict | str, **kw):
 @dataclass
 class PatternField:
     literal_text: str
-    field_name: str
+    field_name: Optional[str]
+    specifier: Optional[str]
 
     def fmt(self, kw):
         res = self.literal_text if self.literal_text else ""
         if self.field_name is None:
             return res
-        return res + kw[self.field_name]
+        suffix = kw[self.field_name]
+        if self.specifier:
+            # If provided, enforce specifier
+            regexp = re.compile(VALUE_PATTERNS[self.specifier])
+            if not regexp.match(suffix):
+                msg = f"Parameter '{self.field_name}' does not match specifier '{self.specifier}'"
+                raise InvalidValue(msg)
+        return res + suffix
 
 # see https://github.com/python/cpython/blob/3.12/Lib/string.py
 class Pattern:
@@ -334,8 +344,8 @@ class Pattern:
     @classmethod
     def from_string(cls, pattern: str) -> "Pattern":
         fields = []
-        for literal_text, field_name, _, _ in cls.formatter.parse(pattern):
-            fields.append(PatternField(literal_text, field_name))
+        for literal_text, field_name, specifier, _ in cls.formatter.parse(pattern):
+            fields.append(PatternField(literal_text, field_name, specifier))
         return Pattern(pattern, *fields)
 
     def fmt(self, kw):

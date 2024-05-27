@@ -94,14 +94,12 @@ def test_multi_provide():
 def test_run_match_type():
     wkf = Workflow()
 
-    @wkf.provide("my-uuid.{name:uuid}", "my-id.{name:identifier}", "my-int.{name:int}")
-    def my_uuid(name="default"):
-        return name, name, name
+    @wkf.provide("lower.{name:uuid}", "upper.{name:uuid}")
+    def my_uuid(name):
+        return name.lower(), name.upper()
 
-    res = wkf.run("my-uuid.40b4550b-f1dd-4846-bc70-d8f5f235e72b")
+    res = wkf.run("lower.40b4550b-f1dd-4846-bc70-d8f5f235e72b", )
     assert res == "40b4550b-f1dd-4846-bc70-d8f5f235e72b"
 
-    res = wkf.run("my-int.123")
-    assert res == "123"
-    res = wkf.run("my-id.abc")
-    assert res == "abc"
+    res = wkf.run("upper.40b4550b-f1dd-4846-bc70-d8f5f235e72b")
+    assert res == "40B4550B-F1DD-4846-BC70-D8F5F235E72B"

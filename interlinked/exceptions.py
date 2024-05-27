@@ -12,3 +12,6 @@ class LoopException(InterlinkedException):
 
 class UnknownDependency(InterlinkedException):
     pass
+
+class InvalidValue(InterlinkedException):
+    pass
