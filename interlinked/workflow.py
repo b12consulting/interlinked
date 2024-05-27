@@ -191,12 +191,10 @@ class Workflow:
         # used for pattern matching
         return match
 
-    def run(self, resource_name: str | list[str], **extra_kw):
+    def run(self, *resource_name: str, **extra_kw):
         """
         Create a Run instance and execute it
         """
-        if isinstance(resource_name, str):
-            resource_name = [resource_name]
         run = Run(self, **extra_kw)
         results = tuple(run.resolve(name) for name in resource_name)
         if len(results) == 1:
