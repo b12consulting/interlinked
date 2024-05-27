@@ -1,3 +1,4 @@
+import datetime
 from interlinked.router import Router
 
 
@@ -62,6 +63,7 @@ def test_param_type():
             "four/{four:uuid}": lambda four: four,
             "five_{ham}_{spam}": lambda ham, spam: (ham, spam),
             "six_{ham}-{spam:uuid}": lambda ham, spam: (ham, spam),
+            "seven_{dt:datetime}": lambda dt: dt,
         }
     )
 
@@ -102,3 +104,16 @@ def test_param_type():
     match = router.match("six_one-40b4550b-f1dd-4846-bc70-d8f5f235e72b")
     fn, kw = match.value, match.kw
     assert fn(**kw) == ("one", "40b4550b-f1dd-4846-bc70-d8f5f235e72b")
+
+    match = router.match("seven_2021-01-01T12:00:00+02:00")
+    fn, kw = match.value, match.kw
+    dt = datetime.datetime.fromisoformat(fn(**kw))
+    assert (dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second, dt.tzinfo) == (
+        2021,
+        1,
+        1,
+        12,
+        0,
+        0,
+        datetime.timezone(datetime.timedelta(hours=2)),
+    )

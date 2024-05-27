@@ -18,6 +18,11 @@ VALUE_PATTERNS = {
     "str": "[a-z0-9:+._ -]+",
     "int": "[-+]?[0-9]+",
     "path": "[a-z0-9./_-]+",
+    # ISO 8601 datetime format
+    # from https://www.oreilly.com/library/view/regular-expressions-cookbook/9781449327453/ch04s07.html
+    "datetime": r"(-?(?:[1-9][0-9]*)?[0-9]{4})-(1[0-2]|0[1-9])-(3[01]|0[1-9]|[12][0-9])"
+    "T(2[0-3]|[01][0-9]):([0-5][0-9]):([0-5][0-9])(\.[0-9]+)?"
+    "(Z|[+-](?:2[0-3]|[01][0-9]):[0-5][0-9])?",
     "uuid": "[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}-?[a-f0-9]{4}-?[a-f0-9]{12}",
 }
 PARAM_REGEX = re.compile("{(" + ID_PATTERN + ")}", re.I)
@@ -66,7 +71,7 @@ class Router:
             else:
                 param_type = "str"
 
-            ptrn = VALUE_PATTERNS.get(param_type, VALUE_PATTERNS["str"])
+            ptrn = VALUE_PATTERNS[param_type]
 
             path_regex += re.escape(path[idx : match.start()])
             path_regex += f"(?P<{param_name}>{ptrn})"
