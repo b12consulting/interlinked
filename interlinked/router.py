@@ -15,7 +15,7 @@ import re
 ID_PATTERN = "[a-z][a-z0-9:_]+"
 VALUE_PATTERNS = {
     "identifier": "[a-z][a-z0-9_]*",
-    "str": "[a-z0-9:._-]+",
+    "str": "[a-z0-9:+._ -]+",
     "int": "[-+]?[0-9]+",
     "path": "[a-z0-9./_-]+",
     "uuid": "[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}-?[a-f0-9]{4}-?[a-f0-9]{12}",
