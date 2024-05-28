@@ -38,7 +38,7 @@ class Match:
 
 
 class Router:
-    def __init__(self, **routes: dict[str, Any]):
+    def __init__(self, **routes: Any):
         self.routes = defaultdict(set)
         self.add_routes(routes)
 
