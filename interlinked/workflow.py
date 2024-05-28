@@ -1,16 +1,18 @@
 import re
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Callable, Optional
 from collections import defaultdict
 from functools import partial
 from inspect import signature, Signature
 from itertools import chain
 from string import Formatter
+import time
+import logging
 
 from interlinked.router import Router, Match, VALUE_PATTERNS
 from interlinked.exceptions import NoRootException, LoopException, UnknownDependency, InvalidValue
 
-
+logger = logging.getLogger("interlinked")
 
 
 class Cell:
@@ -29,7 +31,7 @@ class Cell:
         self.dependencies = {}
         self.mutators = {}
 
-    def __call__(self, fn: callable):
+    def __call__(self, fn: Callable):
         self.workflow.by_fn[fn].append(self)
         self.fn = fn
         return fn
@@ -45,9 +47,9 @@ class Workflow:
 
     def __init__(
         self,
-        name: Optional[str] = None,
+        name: str,
         router: Optional[Router] = None,
-        by_fn: Optional[dict[callable, list[Cell]]] = None,
+        by_fn: Optional[dict[Callable, list[Cell]]] = None,
         base_kw: Optional[dict] = None,
         config: Optional[dict] = None,
     ):
@@ -67,8 +69,8 @@ class Workflow:
             self.set_config(config)
 
     @classmethod
-    def get(self, name: str):
-        return self._registry.get(name)
+    def get(cls, name: str) -> "Workflow | None":
+        return cls._registry.get(name)
 
     def set_config(self, config: dict):
         self.config_router = Router(**config)
@@ -132,7 +134,7 @@ class Workflow:
         kw = kw or {}
         config = config or self.config_router.routes.copy()
         new_wkf = Workflow(
-            name=name,
+            name=name or self.name + "_clone",
             router=self.router.clone(),
             by_fn=self.by_fn,
             base_kw={**self.base_kw, **kw},
@@ -192,11 +194,15 @@ class Workflow:
         # used for pattern matching
         return match
 
-    def run(self, resource_name: str, **extra_kw):
+    def run(self, *resource_name: str, **extra_kw):
         """
         Create a Run instance and execute it
         """
-        return Run(self, **extra_kw).resolve(resource_name)
+        run = Run(self, **extra_kw)
+        results = tuple(run.resolve(name) for name in resource_name)
+        if len(results) == 1:
+            return results[0]
+        return results
 
 
 class Run:
@@ -206,8 +212,8 @@ class Run:
         # Cache at instance level
         self.cache = {}
 
-    def resolve(self, resource_name):
-        if res := self.cache.get(resource_name):
+    def resolve(self, resource_name) -> Any:
+        if (res := self.cache.get(resource_name)) is not None:
             return res
 
         # Search fn
@@ -222,7 +228,12 @@ class Run:
         cell = match.value
         if cell.dependencies:
             for alias, resource in cell.dependencies.items():
-                resource = resource.fmt(kw)
+                try:
+                    resource = resource.fmt(kw)
+                except KeyError as e:
+                    raise KeyError(
+                        f"Missing dependency {resource} for {resource_name} in workflow {self.wkf.name}"
+                    ) from e
                 read = bind(self.resolve, [resource])
                 kw[alias] = read()
 
@@ -231,7 +242,14 @@ class Run:
             kw[alias] = bind(fn, kw=kw)()
 
         # Run function
+        logger.debug(f"Workflow {self.wkf.name} running {cell.fn.__name__}")
+
+        start_time = time.time()
         res = bind(cell.fn, kw=kw)()
+        end_time = time.time()
+
+        execution_time = end_time - start_time
+        logger.debug(f"Call of {cell.fn.__name__} took {execution_time:.3f}s")
 
         # Cache & return simple cell
         if len(cell.patterns) == 1:
@@ -256,7 +274,7 @@ mutate = default_workflow.mutate
 set_config = default_workflow.set_config
 
 
-def bind(fn: callable, args=None, kw=None):
+def bind(fn: Callable, args=None, kw=None):
     """
     Bind keyword parameters to the given function (if needed).
     """
@@ -334,6 +352,7 @@ class PatternField:
                 msg = f"Parameter '{self.field_name}' does not match specifier '{self.specifier}'"
                 raise InvalidValue(msg)
         return res + suffix
+
 
 # see https://github.com/python/cpython/blob/3.12/Lib/string.py
 class Pattern:

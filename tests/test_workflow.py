@@ -90,9 +90,8 @@ def test_multi_provide():
     LOGS.clear()
 
 
-
 def test_run_match_type():
-    wkf = Workflow()
+    wkf = Workflow("test_run_match_type")
 
     @wkf.provide("lower.{name:uuid}", "upper.{name:uuid}")
     def my_uuid(name):
