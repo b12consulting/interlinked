@@ -1,16 +1,28 @@
+import re
+from dataclasses import dataclass
 from typing import Optional
 from collections import defaultdict
 from functools import partial
 from inspect import signature, Signature
 from itertools import chain
+from string import Formatter
 
-from interlinked import Router
-from interlinked.exceptions import NoRootException, LoopException, UnknownDependency
+from interlinked.router import Router, Match, VALUE_PATTERNS
+from interlinked.exceptions import NoRootException, LoopException, UnknownDependency, InvalidValue
 
 
-class Item:
-    def __init__(self, pattern: str, workflow: "Workflow", kw: Optional[dict] = None):
-        self.pattern = pattern
+
+
+class Cell:
+    """
+    A cell is a node in the workflow it associate one or more
+    pattern to a function and keep track of its dependencies.
+    """
+
+    def __init__(
+        self, workflow: "Workflow", patterns: tuple[str, ...], kw: Optional[dict] = None
+    ):
+        self.patterns = [Pattern.from_string(p) for p in patterns]
         self.workflow = workflow
         self.fn = None
         self.kw = kw or {}
@@ -35,9 +47,8 @@ class Workflow:
         self,
         name: Optional[str] = None,
         router: Optional[Router] = None,
-        by_fn: Optional[dict[callable, list[Item]]] = None,
+        by_fn: Optional[dict[callable, list[Cell]]] = None,
         base_kw: Optional[dict] = None,
-        resolve: callable = None,
         config: Optional[dict] = None,
     ):
         if name:
@@ -50,7 +61,6 @@ class Workflow:
         self.by_fn.update(by_fn or {})
         self.base_kw = {}
         self.base_kw.update(base_kw or {})
-        self.resolve = resolve or self.run
         self._validated = False
         self.config_router = Router()
         if config:
@@ -96,14 +106,14 @@ class Workflow:
         p2c = {p: [] for p in self.router.routes}
         for pattern in self.router.routes:
             match = self.router.match(pattern)
-            item = match.value
-            parents = item.dependencies.values()
+            cell = match.value
+            parents = (p.pattern for p in cell.dependencies.values())
             for parent in parents:
                 if parent not in p2c:
                     # Try pattern matching
                     match = self.router.match(parent)
                     if match:
-                        parent = match.value.pattern
+                        parent = match.route
                     else:
                         raise UnknownDependency(
                             f"Dependency '{parent}' is not known "
@@ -136,34 +146,39 @@ class Workflow:
     def config(self, config: dict):
         return self.clone(config=config)
 
-    def provide(self, pattern: str, **kw):
+    def provide(self, *patterns: str, **kw):
         self._validated = False
-        if pattern in self.router:
-            msg = f"{pattern} already defined in Workflow '{self.name}'"
-            raise ValueError(msg)
-        item = Item(pattern, self, kw)
-        self.router.add(pattern, item)
-        return item
+        for pattern in patterns:
+            if pattern in self.router:
+                msg = f"{pattern} already defined in Workflow '{self.name}'"
+                raise ValueError(msg)
+        cell = Cell(self, patterns, kw)
+        for pattern in patterns:
+            self.router.add(pattern, cell)
+        return cell
 
     def depend(self, **dependencies):
         self._validated = False
+        if dependencies:
+            # convert pattern strings into objects
+            dependencies = {k: Pattern.from_string(v) for k, v in dependencies.items()}
 
         def decorator(fn):
-            for item in self.by_fn[fn]:
-                item.depend(dependencies)
+            for cell in self.by_fn[fn]:
+                cell.depend(dependencies)
             return fn
 
         return decorator
 
     def mutate(self, **mutators):
         def decorator(fn):
-            for item in self.by_fn[fn]:
-                item.mutators = {**mutators, **item.mutators}
+            for cell in self.by_fn[fn]:
+                cell.mutators = {**mutators, **cell.mutators}
             return fn
 
         return decorator
 
-    def by_name(self, name: str):
+    def by_name(self, name: str) -> Match:
         """
         Find a function that match the given name. Either because the
         exact name is found. Either through pattern matching. Returns
@@ -172,37 +187,64 @@ class Workflow:
         """
         match = self.router.match(name)
         if not match:
-            raise KeyError(f"No ressource found in workflow for '{name}'")
+            raise KeyError(f"No resource found in workflow for '{name}'")
         # match contains an extra dict of kw, that contains values
         # used for pattern matching
-        item, match_kw = match
-        return item, {**item.kw, **match_kw}
+        return match
 
     def run(self, resource_name: str, **extra_kw):
+        """
+        Create a Run instance and execute it
+        """
+        return Run(self, **extra_kw).resolve(resource_name)
+
+
+class Run:
+    def __init__(self, wkf, **extra_kw):
+        self.wkf = wkf
+        self.extra_kw = extra_kw
+        # Cache at instance level
+        self.cache = {}
+
+    def resolve(self, resource_name):
+        if res := self.cache.get(resource_name):
+            return res
+
         # Search fn
-        item, match_kw = self.by_name(resource_name)
-        # Identify config item and apply auto-formating
-        config_entry = self.config_router.get(resource_name, {})
+        match = self.wkf.by_name(resource_name)
+        # Identify config cell and apply auto-formating
+        config_entry = self.wkf.config_router.get(resource_name, {})
         if config_entry:
-            config_entry = rformat(config_entry, **match_kw)
+            config_entry = rformat(config_entry, **match.kw)
 
-        kw = {**self.base_kw, **match_kw, **extra_kw, **config_entry}
+        kw = {**self.wkf.base_kw, **match.kw, **self.extra_kw, **config_entry}
         # Resolve dependencies
-        if item.dependencies:
-            if not self.resolve:
-                raise RuntimeError("Missing resolve function on workflow")
-
-            for alias, ressource in item.dependencies.items():
-                ressource = ressource.format(**kw)
-                read = bind(self.resolve, [ressource], extra_kw)
+        cell = match.value
+        if cell.dependencies:
+            for alias, resource in cell.dependencies.items():
+                resource = resource.fmt(kw)
+                read = bind(self.resolve, [resource])
                 kw[alias] = read()
 
         # Mutate parameters
-        for alias, fn in item.mutators.items():
+        for alias, fn in cell.mutators.items():
             kw[alias] = bind(fn, kw=kw)()
 
         # Run function
-        return bind(item.fn, kw=kw)()
+        res = bind(cell.fn, kw=kw)()
+
+        # Cache & return simple cell
+        if len(cell.patterns) == 1:
+            self.cache[resource_name] = res
+            return res
+
+        # If a cell contains multiple patterns (multi-provide
+        # decorator), extract the relevant one
+        assert isinstance(res, tuple)
+        for pattern, pattern_res in zip(cell.patterns, res):
+            self.cache[pattern.fmt(match.kw)] = pattern_res
+        raw_patterns = [p.pattern for p in cell.patterns]
+        return res[raw_patterns.index(match.route)]
 
 
 # Define shortcuts
@@ -264,10 +306,52 @@ def rformat(cfg: list | dict | str, **kw):
             cfg[key] = rformat(value, **kw)
     # List
     if isinstance(cfg, list):
-        cfg = [rformat(item, **kw) for item in cfg]
+        cfg = [rformat(cell, **kw) for cell in cfg]
 
     # Simple string
     if isinstance(cfg, str):
-        cfg = cfg.format(**kw)
+        ptrn = Pattern.from_string(cfg)
+        cfg = ptrn.fmt(kw)
 
     return cfg
+
+
+@dataclass
+class PatternField:
+    literal_text: str
+    field_name: Optional[str]
+    specifier: Optional[str]
+
+    def fmt(self, kw):
+        res = self.literal_text if self.literal_text else ""
+        if self.field_name is None:
+            return res
+        suffix = kw[self.field_name]
+        if self.specifier:
+            # If provided, enforce specifier
+            regexp = re.compile(VALUE_PATTERNS[self.specifier])
+            if not regexp.match(suffix):
+                msg = f"Parameter '{self.field_name}' does not match specifier '{self.specifier}'"
+                raise InvalidValue(msg)
+        return res + suffix
+
+# see https://github.com/python/cpython/blob/3.12/Lib/string.py
+class Pattern:
+    formatter = Formatter()
+
+    def __init__(self, pattern: str, *fields: PatternField):
+        self.pattern = pattern
+        self.fields = fields
+
+    @classmethod
+    def from_string(cls, pattern: str) -> "Pattern":
+        fields = []
+        for literal_text, field_name, specifier, _ in cls.formatter.parse(pattern):
+            fields.append(PatternField(literal_text, field_name, specifier))
+        return Pattern(pattern, *fields)
+
+    def fmt(self, kw):
+        return "".join(f.fmt(kw) for f in self.fields)
+
+    def __repr__(self):
+        return f"<Pattern {self.pattern}>"

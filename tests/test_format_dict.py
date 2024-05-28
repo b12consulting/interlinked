@@ -23,7 +23,7 @@ def test_fmt_str():
 def test_fmt_combined():
     d = {"ham-{spam}": ["foo-{bar}", {"ham": "{spam}"}]}
     res = rformat(d, spam="SPAM", bar="BAR")
-    assert res == {'ham-SPAM': ['foo-BAR', {'ham': 'SPAM'}]}
+    assert res == {"ham-SPAM": ["foo-BAR", {"ham": "SPAM"}]}
 
 
 @provide("echo.{name}")
@@ -32,10 +32,6 @@ def echo(url):
 
 
 def test_fmt_with_wkf():
-    set_config({
-        "echo.{name}": {
-            "url": "http://host/{name}.json"
-        }
-    })
+    set_config({"echo.{name}": {"url": "http://host/{name}.json"}})
 
     assert run("echo.spam") == "http://host/spam.json"
