@@ -97,8 +97,30 @@ def test_run_match_type():
     def my_uuid(name):
         return name.lower(), name.upper()
 
-    res = wkf.run("lower.40b4550b-f1dd-4846-bc70-d8f5f235e72b", )
+    res = wkf.run(
+        "lower.40b4550b-f1dd-4846-bc70-d8f5f235e72b",
+    )
     assert res == "40b4550b-f1dd-4846-bc70-d8f5f235e72b"
 
     res = wkf.run("upper.40b4550b-f1dd-4846-bc70-d8f5f235e72b")
     assert res == "40B4550B-F1DD-4846-BC70-D8F5F235E72B"
+
+
+def test_provide_override():
+    wkf = Workflow("test_provide_override")
+
+    @wkf.provide("echo")
+    def echo():
+        return "default"
+
+    with pytest.raises(ValueError):
+
+        @wkf.provide("echo")
+        def echo():
+            return "override"
+
+    @wkf.provide("echo", _override=True)
+    def echo():
+        return "override"
+
+    assert wkf.run("echo") == "override"
