@@ -10,12 +10,7 @@ import time
 import logging
 
 from interlinked.router import Router, Match, VALUE_PATTERNS
-from interlinked.exceptions import (
-    NoRootException,
-    LoopException,
-    UnknownDependency,
-    InvalidValue,
-)
+from interlinked.exceptions import NoRootException, LoopException, UnknownDependency, InvalidValue
 
 logger = logging.getLogger("interlinked")
 
@@ -104,6 +99,7 @@ class Workflow:
                 raise LoopException(msg)
             self._validate(child, deps, ancestors + (child,))
 
+
     def deps(self):
         """
         build {parent: [child]} dependency dictionary.
@@ -154,6 +150,10 @@ class Workflow:
 
     def provide(self, *patterns: str, **kw):
         self._validated = False
+        for pattern in patterns:
+            if pattern in self.router:
+                msg = f"{pattern} already defined in Workflow '{self.name}'"
+                raise ValueError(msg)
         cell = Cell(self, patterns, kw)
         for pattern in patterns:
             self.router.add(pattern, cell)
