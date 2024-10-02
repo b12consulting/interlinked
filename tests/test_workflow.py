@@ -1,3 +1,4 @@
+from datetime import date, datetime
 from collections import defaultdict
 
 import pytest
@@ -106,7 +107,27 @@ def test_run_match_type():
     assert res == "40B4550B-F1DD-4846-BC70-D8F5F235E72B"
 
 
+def test_run_match_cast():
+    "Test that int, date and datetime are casted properly"
+
+    wkf = Workflow("test_run_match_cast")
+
+    @wkf.provide("date.{value:date}")
+    @wkf.provide("datetime.{value:datetime}")
+    @wkf.provide("int.{value:int}")
+    def my_test(value):
+        return value
+
+    assert wkf.run("date.2025-01-01") == date(2025, 1, 1)
+    assert wkf.run("datetime.2025-01-01T12:00:00") == datetime(2025, 1, 1, 12, 0, 0)
+    assert wkf.run("int.42") == 42
+
+
 def test_provide_override():
+    """
+    Test that we can not redefine a route except if explicitly asked.
+    """
+
     wkf = Workflow("test_provide_override")
 
     @wkf.provide("echo")

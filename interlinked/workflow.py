@@ -9,7 +9,7 @@ from string import Formatter
 import time
 import logging
 
-from interlinked.router import Router, Match, VALUE_PATTERNS
+from interlinked.router import Router, RouteInfo, VALUE_PATTERNS
 from interlinked.exceptions import (
     NoRootException,
     LoopException,
@@ -185,7 +185,7 @@ class Workflow:
 
         return decorator
 
-    def by_name(self, name: str) -> Match:
+    def by_name(self, name: str) -> RouteInfo:
         """
         Find a function that match the given name. Either because the
         exact name is found. Either through pattern matching. Returns
@@ -223,12 +223,14 @@ class Run:
 
         # Search fn
         match = self.wkf.by_name(resource_name)
+        match_kw = match.typed_kw()
+
         # Identify config cell and apply auto-formating
         config_entry = self.wkf.config_router.get(resource_name, {})
         if config_entry:
-            config_entry = rformat(config_entry, **match.kw)
+            config_entry = rformat(config_entry, **match_kw)
 
-        kw = {**self.wkf.base_kw, **match.kw, **self.extra_kw, **config_entry}
+        kw = {**self.wkf.base_kw, **match_kw, **self.extra_kw, **config_entry}
         # Resolve dependencies
         cell = match.value
         if cell.dependencies:
@@ -264,8 +266,9 @@ class Run:
         # If a cell contains multiple patterns (multi-provide
         # decorator), extract the relevant one
         assert isinstance(res, tuple)
+
         for pattern, pattern_res in zip(cell.patterns, res):
-            self.cache[pattern.fmt(match.kw)] = pattern_res
+            self.cache[pattern.fmt(match_kw)] = pattern_res
         raw_patterns = [p.pattern for p in cell.patterns]
         return res[raw_patterns.index(match.route)]
 
