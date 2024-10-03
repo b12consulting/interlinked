@@ -123,6 +123,22 @@ def test_run_match_cast():
     assert wkf.run("int.42") == 42
 
 
+def test_cast_depend():
+    wkf = Workflow("test_cast_depend")
+
+    @wkf.provide("dependent.{value:datetime}")
+    def dependent(value):
+        return value
+
+    @wkf.depend(value="dependent.{value:datetime}")
+    @wkf.provide("final.{value:datetime}")
+    def final(value):
+        return value
+
+    _ = wkf.run("final.2025-01-01T12:00:00")
+
+
+
 def test_provide_override():
     """
     Test that we can not redefine a route except if explicitly asked.

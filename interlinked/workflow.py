@@ -222,37 +222,53 @@ class Run:
             return res
 
         # Search fn
-        match = self.wkf.by_name(resource_name)
-        match_kw = match.typed_kw()
+        route_info = self.wkf.by_name(resource_name)
 
         # Identify config cell and apply auto-formating
         config_entry = self.wkf.config_router.get(resource_name, {})
         if config_entry:
-            config_entry = rformat(config_entry, **match_kw)
+            config_entry = rformat(config_entry, **route_info.kw)
 
-        kw = {**self.wkf.base_kw, **match_kw, **self.extra_kw, **config_entry}
+
         # Resolve dependencies
-        cell = match.value
+        cell = route_info.value
+        dep_kw = {}
         if cell.dependencies:
+            # Collapse all kw for dependecy resolution
+            resolve_kw = {
+                **self.wkf.base_kw,
+                **route_info.kw,
+                **self.extra_kw,
+                **config_entry,
+            }
             for alias, resource in cell.dependencies.items():
                 try:
-                    resource = resource.fmt(kw)
+                    resource = resource.fmt(resolve_kw)
                 except KeyError as e:
                     raise KeyError(
                         f"Missing dependency {resource} for {resource_name} in workflow {self.wkf.name}"
                     ) from e
                 read = bind(self.resolve, [resource])
-                kw[alias] = read()
+                dep_kw[alias] = read()
+
+        # Collapse all kw for function binding
+        bind_kw = {
+            **self.wkf.base_kw,
+            **route_info.typed_kw,  # We use typed version here
+            **self.extra_kw,
+            **config_entry,
+            **dep_kw,
+        }
 
         # Mutate parameters
         for alias, fn in cell.mutators.items():
-            kw[alias] = bind(fn, kw=kw)()
+            bind_kw[alias] = bind(fn, kw=bind_kw)()
 
         # Run function
         logger.debug(f"Workflow {self.wkf.name} running {cell.fn.__name__}")
-
         start_time = time.time()
-        res = bind(cell.fn, kw=kw)()
+
+        res = bind(cell.fn, kw=bind_kw)()
         end_time = time.time()
 
         execution_time = end_time - start_time
@@ -268,9 +284,9 @@ class Run:
         assert isinstance(res, tuple)
 
         for pattern, pattern_res in zip(cell.patterns, res):
-            self.cache[pattern.fmt(match_kw)] = pattern_res
+            self.cache[pattern.fmt(route_info.kw)] = pattern_res
         raw_patterns = [p.pattern for p in cell.patterns]
-        return res[raw_patterns.index(match.route)]
+        return res[raw_patterns.index(route_info.route)]
 
 
 # Define shortcuts

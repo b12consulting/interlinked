@@ -40,7 +40,7 @@ class RouteInfo:
     regex: re.Pattern
     value: Any
     types: dict[str, str]
-    kw: dict = None
+    kw: dict[str, str]
 
     def clone(self, kw: dict):
         """
@@ -54,6 +54,7 @@ class RouteInfo:
             kw=kw,
         )
 
+    @property
     def typed_kw(self):
         """
         Return a dictionary with the kw values converted to the proper type.
@@ -127,6 +128,7 @@ class Router:
             regex=re.compile(path_regex, re.I),
             value=value,
             types=types,
+            kw={},
         )
 
     def match(self, key: str) -> Optional[RouteInfo]:
