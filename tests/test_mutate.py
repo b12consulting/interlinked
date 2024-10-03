@@ -17,3 +17,27 @@ def test_run_mutate():
     assert res == "HAM"
     res = wkf.run("ham.echo.spam")
     assert res == "HAMHAMspam"
+
+
+
+@wkf.provide("get-extra.{name}")
+def get_extra(name):
+    return name
+
+# Not mutate
+@wkf.depend(extra="get-extra.static")
+@wkf.provide("static.echo-extra")
+# With mutate
+@wkf.depend(extra="get-extra.{prefix}")
+@wkf.mutate(extra=lambda prefix: {"my_key": prefix})
+@wkf.provide("{prefix}.echo-extra")
+def echo_extra(extra=None):
+    return extra
+
+
+def test_run_mutate_extra():
+    res = wkf.run("ham.echo-extra")
+    assert res == {"my_key": "ham"}
+
+    res = wkf.run("static.echo-extra")
+    assert res == "static"

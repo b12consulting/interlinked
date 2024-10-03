@@ -1,3 +1,4 @@
+from datetime import datetime
 from dataclasses import dataclass
 from typing import Optional, Any
 from collections import defaultdict
@@ -25,16 +26,56 @@ VALUE_PATTERNS = {
         r"T(2[0-3]|[01][0-9]):([0-5][0-9]):([0-5][0-9])(.[0-9]+)?"
         r"(Z|[+-](?:2[0-3]|[01][0-9]):[0-5][0-9])?"
     ),
+    "date": (
+        r"(-?(?:[1-9][0-9]*)?[0-9]{4})-(1[0-2]|0[1-9])-(3[01]|0[1-9]|[12][0-9])"
+    ),
     "uuid": "[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}-?[a-f0-9]{4}-?[a-f0-9]{12}",
 }
 PARAM_REGEX = re.compile("{(" + ID_PATTERN + ")}", re.I)
 
 
 @dataclass
-class Match:
+class RouteInfo:
     route: str
+    regex: re.Pattern
     value: Any
-    kw: dict
+    types: dict[str, str]
+    kw: dict[str, str]
+
+    def clone(self, kw: dict):
+        """
+        Return an object copy with added kw.
+        """
+        return RouteInfo(
+            route=self.route,
+            regex=self.regex,
+            value=self.value,
+            types=self.types,
+            kw=kw,
+        )
+
+    @property
+    def typed_kw(self):
+        """
+        Return a dictionary with the kw values converted to the proper type.
+        """
+        if not self.kw:
+            return {}
+        return {key: self.auto_type(key) for key in self.kw}
+
+    def auto_type(self, key):
+        value = self.kw[key]
+        kw_type = self.types[key]
+
+        match kw_type:
+            case "int":
+                return int(value)
+            case "datetime":
+                return datetime.fromisoformat(value)
+            case "date":
+                return datetime.fromisoformat(value).date()
+        return value
+
 
 
 class Router:
@@ -66,6 +107,7 @@ class Router:
 
         idx = 0
         path_regex = "^"
+        types = {}
         for match in PARAM_REGEX.finditer(path):
             (param_name,) = match.groups()
             if ":" in param_name:
@@ -74,15 +116,22 @@ class Router:
                 param_type = "str"
 
             ptrn = VALUE_PATTERNS[param_type]
+            types[param_name] = param_type
 
             path_regex += re.escape(path[idx : match.start()])
             path_regex += f"(?P<{param_name}>{ptrn})"
             idx = match.end()
 
         path_regex += re.escape(path[idx:].split(":")[0]) + "$"
-        self.routes[path] = (re.compile(path_regex, re.I), value)
+        self.routes[path] = RouteInfo(
+            route=path,
+            regex=re.compile(path_regex, re.I),
+            value=value,
+            types=types,
+            kw={},
+        )
 
-    def match(self, key: str) -> Optional[Match]:
+    def match(self, key: str) -> Optional[RouteInfo]:
         """
         Return a tuple (value, match dict) if key is found. Return None if
         not.
@@ -90,14 +139,12 @@ class Router:
         # Test for exact match
         res = self.routes.get(key)
         if res is not None:
-            _, value = res
-            return Match(key, value, {})
-        # Test pattern
-        for route, (regex, value) in self.routes.items():
-            m = regex.match(key)
-            if not m:
-                continue
-            return Match(route, value, m.groupdict())
+            return res
+
+        # Test patterns
+        for route, route_info in self.routes.items():
+            if res := route_info.regex.match(key):
+                return route_info.clone(kw=res.groupdict())
         return None
 
     def get(self, key: str, default: Any = None):
