@@ -138,7 +138,6 @@ def test_cast_depend():
     _ = wkf.run("final.2025-01-01T12:00:00")
 
 
-
 def test_provide_override():
     """
     Test that we can not redefine a route except if explicitly asked.
@@ -161,3 +160,20 @@ def test_provide_override():
         return "override"
 
     assert wkf.run("echo") == "override"
+
+
+def test_mixed_wkf():
+    wkf_a = Workflow("test_mixed_wk_a")
+    wkf_b = Workflow("test_mixed_wkf_b")
+
+    # Mixed workflows
+    @wkf_a.provide('echo-a')
+    def echo_c():
+        return 'a'
+
+    @wkf_a.depend(parent='echo-a')
+    @wkf_b.provide('echo-b')
+    def echo_b(parent):
+        return parent + 'b'
+
+    assert wkf_b.run('echo-b') == 'ab'

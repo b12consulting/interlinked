@@ -27,9 +27,11 @@ class Cell:
     """
 
     def __init__(
-        self, workflow: "Workflow", patterns: tuple[str, ...], kw: Optional[dict] = None
+        self, workflow: "Workflow", provide_patterns: tuple[str, ...], kw: Optional[dict] = None
     ):
-        self.patterns = [Pattern.from_string(p) for p in patterns]
+        self.provide_patterns = [
+            Pattern.from_string(p) for p in provide_patterns
+        ]
         self.workflow = workflow
         self.fn = None
         self.kw = kw or {}
@@ -37,24 +39,58 @@ class Cell:
         self.mutators = {}
 
     def __call__(self, fn: Callable):
-        self.workflow.by_fn[fn].append(self)
+        Workflow.by_fn[fn].append(self)
         self.fn = fn
         return fn
 
-    def depend(self, dependencies):
+    def depend(self, dependencies: dict[str, "Dependency"]):
         self.dependencies = {**dependencies, **self.dependencies}
         return self
+
+    def __repr__(self):
+        return f"<Cell wkf:{self.workflow.name} fn:{self.fn}>"
+
+
+class Dependency:
+    """
+    This class models a dependency as defined on a cell. It
+    associate the given pattern to the correct workflow instance.
+    """
+
+    def __init__(self, wkf: "Workflow", pattern: str):
+        self.pattern = Pattern.from_string(pattern)
+        self.wkf = wkf
+
+    def fmt(self, kw: dict) -> "Dependency":
+        "Returned a cloned depency with the formatted pattern"
+        return Dependency(self.wkf, self.pattern.fmt(kw))
+
+    def __repr__(self):
+        return (
+            f"<Dependency w:{self.wkf.name} "
+            f"p:{self.pattern.value}>"
+        )
+
+    @property
+    def key(self):
+        return f"{self.wkf.name}:{self.pattern.value}"
+
+    def __hash__(self):
+        return hash(self.key)
+
+    def __eq__(self, other):
+        return self.key == other.key
 
 
 class Workflow:
 
-    _registry = {}
+    _registry: dict[str, "Workflow"] = {}
+    by_fn: Optional[dict[Callable, list[Cell]]] = defaultdict(list)
 
     def __init__(
         self,
         name: str,
         router: Optional[Router] = None,
-        by_fn: Optional[dict[Callable, list[Cell]]] = None,
         base_kw: Optional[dict] = None,
         config: Optional[dict] = None,
     ):
@@ -64,8 +100,6 @@ class Workflow:
             Workflow._registry[name] = self
         self.name = name
         self.router = router or Router()
-        self.by_fn = defaultdict(list)
-        self.by_fn.update(by_fn or {})
         self.base_kw = {}
         self.base_kw.update(base_kw or {})
         self._validated = False
@@ -74,8 +108,8 @@ class Workflow:
             self.set_config(config)
 
     @classmethod
-    def get(cls, name: str) -> "Workflow | None":
-        return cls._registry.get(name)
+    def get(cls, name: str) -> "Workflow":
+        return cls._registry.get(name) or Workflow(name)
 
     def set_config(self, config: dict):
         self.config_router = Router(**config)
@@ -117,7 +151,7 @@ class Workflow:
             for parent in parents:
                 if parent not in p2c:
                     # Try pattern matching
-                    match = self.router.match(parent)
+                    match = self.router.match(parent.value)
                     if match:
                         parent = match.route
                     else:
@@ -140,7 +174,6 @@ class Workflow:
         new_wkf = Workflow(
             name=name or self.name + "_clone",
             router=self.router.clone(),
-            by_fn=self.by_fn,
             base_kw={**self.base_kw, **kw},
             config=config,
         )
@@ -168,7 +201,10 @@ class Workflow:
         self._validated = False
         if dependencies:
             # convert pattern strings into objects
-            dependencies = {k: Pattern.from_string(v) for k, v in dependencies.items()}
+            dependencies = {
+                k: Dependency(self, v)
+                for k, v in dependencies.items()
+            }
 
         def decorator(fn):
             for cell in self.by_fn[fn]:
@@ -204,7 +240,10 @@ class Workflow:
         Create a Run instance and execute it
         """
         run = Run(self, **extra_kw)
-        results = tuple(run.resolve(name) for name in resource_name)
+        results = tuple(
+            run.resolve(Dependency(self, name))
+            for name in resource_name
+        )
         if len(results) == 1:
             return results[0]
         return results
@@ -217,18 +256,17 @@ class Run:
         # Cache at instance level
         self.cache = {}
 
-    def resolve(self, resource_name) -> Any:
-        if (res := self.cache.get(resource_name)) is not None:
+    def resolve(self, dependency) -> Any:
+        if (res := self.cache.get(dependency)) is not None:
             return res
 
         # Search fn
-        route_info = self.wkf.by_name(resource_name)
+        route_info = dependency.wkf.by_name(dependency.pattern.value)
 
         # Identify config cell and apply auto-formating
-        config_entry = self.wkf.config_router.get(resource_name, {})
+        config_entry = self.wkf.config_router.get(dependency.pattern.value, {})
         if config_entry:
             config_entry = rformat(config_entry, **route_info.kw)
-
 
         # Resolve dependencies
         cell = route_info.value
@@ -241,14 +279,16 @@ class Run:
                 **self.extra_kw,
                 **config_entry,
             }
-            for alias, resource in cell.dependencies.items():
+            for alias, parent_dep in cell.dependencies.items():
                 try:
-                    resource = resource.fmt(resolve_kw)
+                    parent_dep = parent_dep.fmt(resolve_kw)
                 except KeyError as e:
-                    raise KeyError(
-                        f"Missing dependency {resource} for {resource_name} in workflow {self.wkf.name}"
-                    ) from e
-                read = bind(self.resolve, [resource])
+                    msg = (
+                        f"Missing dependency {parent_dep.pattern} for "
+                        f"{dependency.pattern} in workflow {self.wkf.name}"
+                    )
+                    raise KeyError(msg) from e
+                read = bind(self.resolve, [parent_dep])
                 dep_kw[alias] = read()
 
         # Collapse all kw for function binding
@@ -267,7 +307,6 @@ class Run:
         # Run function
         logger.debug(f"Workflow {self.wkf.name} running {cell.fn.__name__}")
         start_time = time.time()
-
         res = bind(cell.fn, kw=bind_kw)()
         end_time = time.time()
 
@@ -275,17 +314,18 @@ class Run:
         logger.debug(f"Call of {cell.fn.__name__} took {execution_time:.3f}s")
 
         # Cache & return simple cell
-        if len(cell.patterns) == 1:
-            self.cache[resource_name] = res
+        if len(cell.provide_patterns) == 1:
+            self.cache[dependency] = res
             return res
 
-        # If a cell contains multiple patterns (multi-provide
+        # If a cell provides multiple patterns (multiple provide
         # decorator), extract the relevant one
         assert isinstance(res, tuple)
 
-        for pattern, pattern_res in zip(cell.patterns, res):
-            self.cache[pattern.fmt(route_info.kw)] = pattern_res
-        raw_patterns = [p.pattern for p in cell.patterns]
+        for pattern, pattern_res in zip(cell.provide_patterns, res):
+            dep = Dependency(self.wkf, pattern.fmt(route_info.kw))
+            self.cache[dep] = pattern_res
+        raw_patterns = [p.value for p in cell.provide_patterns]
         return res[raw_patterns.index(route_info.route)]
 
 
@@ -330,7 +370,6 @@ def bind(fn: Callable, args=None, kw=None):
 
     if not (args or partial_kw):
         return fn
-
     return partial(fn, *args, **partial_kw)
 
 
@@ -382,8 +421,8 @@ class PatternField:
 class Pattern:
     formatter = Formatter()
 
-    def __init__(self, pattern: str, *fields: PatternField):
-        self.pattern = pattern
+    def __init__(self, value: str, *fields: PatternField):
+        self.value = value
         self.fields = fields
 
     @classmethod
@@ -397,4 +436,4 @@ class Pattern:
         return "".join(f.fmt(kw) for f in self.fields)
 
     def __repr__(self):
-        return f"<Pattern {self.pattern}>"
+        return f"<Pattern {self.value}>"
