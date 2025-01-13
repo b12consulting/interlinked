@@ -123,21 +123,6 @@ def test_run_match_cast():
     assert wkf.run("int.42") == 42
 
 
-def test_cast_depend():
-    wkf = Workflow("test_cast_depend")
-
-    @wkf.provide("dependent.{value:datetime}")
-    def dependent(value):
-        return value
-
-    @wkf.depend(value="dependent.{value:datetime}")
-    @wkf.provide("final.{value:datetime}")
-    def final(value):
-        return value
-
-    _ = wkf.run("final.2025-01-01T12:00:00")
-
-
 def test_provide_override():
     """
     Test that we can not redefine a route except if explicitly asked.
@@ -177,3 +162,34 @@ def test_mixed_wkf():
         return parent + 'b'
 
     assert wkf_b.run('echo-b') == 'ab'
+
+
+def test_route_args():
+    wkf = Workflow("test_route_args")
+
+    @wkf.provide('echo')
+    @wkf.provide('echo-extra', extra='extra')
+    def echo(extra=""):
+        return "echo" + extra
+
+    assert wkf.run('echo') == 'echo'
+    assert wkf.run('echo-extra') == 'echoextra'
+
+
+def test_param_broadcasting():
+    """
+    A parameter value is broadcasted to all dependent routes.
+    """
+    wkf = Workflow("test_param_broadcasting")
+
+    @wkf.provide("dependent.{value:datetime}")
+    def dependent(value):
+        return value
+
+    @wkf.depend(value="dependent.{value:datetime}")
+    @wkf.provide("final.{value:datetime}")
+    def final(value):
+        return value
+
+    res = wkf.run("final.2025-01-01T12:00:00")
+    assert res == datetime(2025, 1, 1, 12, 0)

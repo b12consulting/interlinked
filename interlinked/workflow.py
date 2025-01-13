@@ -298,6 +298,7 @@ class Run:
             **self.extra_kw,
             **config_entry,
             **dep_kw,
+            **cell.kw,
         }
 
         # Mutate parameters
