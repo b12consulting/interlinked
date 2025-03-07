@@ -70,7 +70,8 @@ def test_fmt_spec_param_from_conf():
     assert res == "from conf (spam)"
 
 
-# Tests config with parameterized content and an invalid valid format specifier
+# Tests config with parameterized content and an invalid valid format
+# specifier
 cfg4 = {
     "hello.{world:identifier}": {
         "fmt_param": "from conf ({world:uuid})",

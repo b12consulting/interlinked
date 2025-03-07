@@ -1,3 +1,4 @@
+from datetime import date, datetime
 from collections import defaultdict
 
 import pytest
@@ -106,7 +107,27 @@ def test_run_match_type():
     assert res == "40B4550B-F1DD-4846-BC70-D8F5F235E72B"
 
 
+def test_run_match_cast():
+    "Test that int, date and datetime are casted properly"
+
+    wkf = Workflow("test_run_match_cast")
+
+    @wkf.provide("date.{value:date}")
+    @wkf.provide("datetime.{value:datetime}")
+    @wkf.provide("int.{value:int}")
+    def my_test(value):
+        return value
+
+    assert wkf.run("date.2025-01-01") == date(2025, 1, 1)
+    assert wkf.run("datetime.2025-01-01T12:00:00") == datetime(2025, 1, 1, 12, 0, 0)
+    assert wkf.run("int.42") == 42
+
+
 def test_provide_override():
+    """
+    Test that we can not redefine a route except if explicitly asked.
+    """
+
     wkf = Workflow("test_provide_override")
 
     @wkf.provide("echo")
@@ -124,3 +145,51 @@ def test_provide_override():
         return "override"
 
     assert wkf.run("echo") == "override"
+
+
+def test_mixed_wkf():
+    wkf_a = Workflow("test_mixed_wk_a")
+    wkf_b = Workflow("test_mixed_wkf_b")
+
+    # Mixed workflows
+    @wkf_a.provide('echo-a')
+    def echo_c():
+        return 'a'
+
+    @wkf_a.depend(parent='echo-a')
+    @wkf_b.provide('echo-b')
+    def echo_b(parent):
+        return parent + 'b'
+
+    assert wkf_b.run('echo-b') == 'ab'
+
+
+def test_route_args():
+    wkf = Workflow("test_route_args")
+
+    @wkf.provide('echo')
+    @wkf.provide('echo-extra', extra='extra')
+    def echo(extra=""):
+        return "echo" + extra
+
+    assert wkf.run('echo') == 'echo'
+    assert wkf.run('echo-extra') == 'echoextra'
+
+
+def test_param_broadcasting():
+    """
+    A parameter value is broadcasted to all dependent routes.
+    """
+    wkf = Workflow("test_param_broadcasting")
+
+    @wkf.provide("dependent.{value:datetime}")
+    def dependent(value):
+        return value
+
+    @wkf.depend(value="dependent.{value:datetime}")
+    @wkf.provide("final.{value:datetime}")
+    def final(value):
+        return value
+
+    res = wkf.run("final.2025-01-01T12:00:00")
+    assert res == datetime(2025, 1, 1, 12, 0)
